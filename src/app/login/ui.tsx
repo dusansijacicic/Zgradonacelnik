@@ -22,12 +22,12 @@ export default function LoginClient() {
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center bg-zinc-50 px-4 py-16">
-      <main className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
+    <div className="flex flex-1 items-center justify-center px-4 py-16">
+      <main className="w-full max-w-md rounded-2xl border border-border-subtle bg-surface p-8 shadow-md">
+        <h1 className="text-2xl font-semibold tracking-tight text-brand-navy">
           Prijava
         </h1>
-        <p className="mt-2 text-sm leading-6 text-zinc-600">
+        <p className="mt-2 text-sm leading-6 text-brand-navy/75">
           Prijavi se Google nalogom da bi koristio dashboard, dodavao recenzije i
           upravljao svojim zgradama (ako imaš prava).
         </p>
@@ -35,7 +35,7 @@ export default function LoginClient() {
         <button
           type="button"
           onClick={signInWithGoogle}
-          className="mt-6 w-full rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white hover:bg-zinc-800"
+          className="mt-6 w-full rounded-xl bg-brand-navy px-4 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-navy-deep"
         >
           Nastavi sa Google
         </button>

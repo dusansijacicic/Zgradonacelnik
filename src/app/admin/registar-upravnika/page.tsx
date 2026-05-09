@@ -24,12 +24,12 @@ export default async function AdminRegistryImportPage() {
             Import registra profesionalnih upravnika (CSV)
           </h1>
           <p className="mt-2 text-sm text-zinc-600">
-            MVP: ručni import. Kolone koje prepoznajemo:{" "}
+            MVP: uvoz cele tabele iz <span className="font-mono text-xs">docs/solidus.csv</span> ili ručni
+            CSV. Za nalepljeni fajl kolone:{" "}
             <span className="font-medium text-zinc-900">
-              full_name, first_name, last_name, license_number, email, phone,
-              municipality
+              full_name, first_name, last_name, license_number, email, phone, municipality
             </span>
-            .
+            . Solidus koristi kolone: Ime, Prezime, Mesto, Licenca br., Telefon, Email, Status…
           </p>
 
           <RegistryImportClient />

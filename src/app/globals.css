@@ -1,26 +1,36 @@
 @import "tailwindcss";
 
+/* Brend iz logotipa: navy plavo, zelena akcent, sky plavo, svetla pozadina */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f2f8fb;
+  --foreground: #152c45;
+  --surface: #ffffff;
+  --brand-navy: #152c45;
+  --brand-navy-deep: #0f1f33;
+  --brand-green: #1a9b52;
+  --brand-green-hover: #158347;
+  --brand-sky: #5eb3d4;
+  --brand-sky-muted: #e3f3fa;
+  --border-subtle: #c5dfe9;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-navy-deep: var(--brand-navy-deep);
+  --color-brand-green: var(--brand-green);
+  --color-brand-green-hover: var(--brand-green-hover);
+  --color-brand-sky: var(--brand-sky);
+  --color-brand-sky-muted: var(--brand-sky-muted);
+  --color-border-subtle: var(--border-subtle);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
