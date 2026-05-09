@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="sr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Zgradonačelnik.rs — Setup (klik‑po‑klik)</title>
+    <style>
+      :root {
+        --bg: #0b1220;
+        --card: #101a2e;
+        --text: #eaf0ff;
+        --muted: #b7c3e6;
+        --line: rgba(255, 255, 255, 0.12);
+        --accent: #58a6ff;
+        --good: #34d399;
+        --warn: #fbbf24;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: radial-gradient(1200px 600px at 20% 0%, #12244a, var(--bg));
+        color: var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+          Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        line-height: 1.55;
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .wrap {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 32px 16px 96px;
+      }
+      .hero {
+        border: 1px solid var(--line);
+        background: rgba(16, 26, 46, 0.8);
+        backdrop-filter: blur(8px);
+        border-radius: 18px;
+        padding: 20px;
+      }
+      .hero h1 {
+        margin: 0 0 6px;
+        font-size: 26px;
+        letter-spacing: -0.02em;
+      }
+      .hero p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .grid {
+        margin-top: 18px;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
+      }
+      @media (min-width: 900px) {
+        .grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+      .card {
+        border: 1px solid var(--line);
+        background: rgba(16, 26, 46, 0.75);
+        border-radius: 18px;
+        padding: 18px;
+      }
+      .card h2 {
+        margin: 0 0 8px;
+        font-size: 18px;
+        letter-spacing: -0.01em;
+      }
+      .card p,
+      .card li {
+        color: var(--muted);
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 6px 10px;
+        color: var(--muted);
+        font-size: 12px;
+        margin-right: 8px;
+        margin-bottom: 8px;
+      }
+      code,
+      pre {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+        font-size: 13px;
+      }
+      pre {
+        margin: 10px 0 0;
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px;
+        overflow: auto;
+        color: #eaf0ff;
+      }
+      .steps {
+        margin: 10px 0 0;
+        padding-left: 18px;
+      }
+      .steps li {
+        margin: 8px 0;
+      }
+      .tag {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .tag.good {
+        border-color: rgba(52, 211, 153, 0.35);
+        color: var(--good);
+      }
+      .tag.warn {
+        border-color: rgba(251, 191, 36, 0.35);
+        color: var(--warn);
+      }
+      .toc a {
+        display: inline-block;
+        margin: 4px 10px 4px 0;
+      }
+      .footer {
+        margin-top: 18px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      hr {
+        border: none;
+        border-top: 1px solid var(--line);
+        margin: 14px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="hero">
+        <h1>Zgradonačelnik.rs — Setup tutorijal (KORAK PO KORAK)</h1>
+        <p>
+          Ovo je “klik‑po‑klik” uputsvo da povežeš sve ključeve i servise koje
+          koristimo u projektu: Supabase, Google OAuth (login), Vercel, Resend
+          (OTP email), Turnstile (CAPTCHA), Mapbox (geokodiranje + radius).
+        </p>
+        <div style="margin-top: 12px">
+          <span class="pill">✅ Next.js + Supabase SSR</span>
+          <span class="pill">✅ RLS + migrations</span>
+          <span class="pill">✅ Storage + signed URL</span>
+          <span class="pill">✅ OTP + Resend</span>
+          <span class="pill">✅ Turnstile (opciono)</span>
+          <span class="pill">✅ Mapbox (opciono)</span>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 14px">
+        <h2>Brzi sadržaj</h2>
+        <div class="toc">
+          <a href="#lokalno">1) Lokalno</a>
+          <a href="#supabase">2) Supabase</a>
+          <a href="#google-oauth">3) Google login</a>
+          <a href="#migrations">4) SQL migracije</a>
+          <a href="#resend">5) Resend (OTP)</a>
+          <a href="#storage">6) Storage + signed URL</a>
+          <a href="#turnstile">7) Turnstile CAPTCHA</a>
+          <a href="#mapbox">8) Mapbox geokodiranje</a>
+          <a href="#vercel">9) Vercel deploy</a>
+          <a href="#gmail-api">10) Gmail API (opciono)</a>
+        </div>
+      </div>
+
+      <div class="grid">
+        <section class="card" id="lokalno">
+          <h2>1) Lokalno pokretanje</h2>
+          <ol class="steps">
+            <li>
+              U root folderu projekta instaliraj pakete:
+              <pre>npm i</pre>
+            </li>
+            <li>
+              Napravi fajl <code>.env.local</code> po uzoru na
+              <code>.env.example</code> i popuni vrednosti (u nastavku).
+            </li>
+            <li>
+              Pokreni dev server:
+              <pre>npm run dev</pre>
+            </li>
+            <li>
+              Otvori:
+              <pre>http://localhost:3000</pre>
+            </li>
+          </ol>
+        </section>
+
+        <section class="card" id="supabase">
+          <h2>2) Supabase projekat</h2>
+          <ol class="steps">
+            <li>
+              Otvori Supabase dashboard → klikni <b>New project</b>.
+            </li>
+            <li>
+              Unesi ime, lozinku za DB, izaberi region → klik <b>Create new project</b>.
+            </li>
+            <li>
+              Levo u meniju: <b>Project Settings</b> → <b>API</b>.
+            </li>
+            <li>
+              Kopiraj:
+              <ul>
+                <li><b>Project URL</b> → <code>NEXT_PUBLIC_SUPABASE_URL</code></li>
+                <li><b>anon public</b> key → <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code></li>
+                <li><b>service_role</b> key → <code>SUPABASE_SERVICE_ROLE_KEY</code> <span class="tag warn">server-only</span></li>
+              </ul>
+            </li>
+          </ol>
+        </section>
+
+        <section class="card" id="google-oauth">
+          <h2>3) Google login (Supabase Auth)</h2>
+          <p>
+            <span class="tag good">obavezno</span> — aplikacija koristi Google
+            login preko Supabase Auth.
+          </p>
+          <ol class="steps">
+            <li>
+              Supabase → <b>Authentication</b> → <b>Providers</b> → <b>Google</b> → uključi <b>Enable</b>.
+            </li>
+            <li>
+              Otvori Google Cloud Console → <b>APIs & Services</b> → <b>Credentials</b>.
+            </li>
+            <li>
+              Klik <b>Create Credentials</b> → <b>OAuth client ID</b> → Application type: <b>Web application</b>.
+            </li>
+            <li>
+              Dodaj Authorized redirect URIs:
+              <pre>http://localhost:3000/auth/callback
+https://&lt;tvoj-domain&gt;/auth/callback</pre>
+            </li>
+            <li>
+              Sačuvaj → kopiraj <b>Client ID</b> i <b>Client secret</b>.
+            </li>
+            <li>
+              Vrati se u Supabase Google provider i nalepi Client ID/Secret → <b>Save</b>.
+            </li>
+          </ol>
+        </section>
+
+        <section class="card" id="migrations">
+          <h2>4) SQL migracije (schema + RLS + RPC)</h2>
+          <ol class="steps">
+            <li>
+              Supabase → <b>SQL Editor</b> → <b>New query</b>.
+            </li>
+            <li>
+              Otvori u projektu fajl i izvrši ga jednom:
+              <pre>supabase/migrations/0001_init.sql</pre>
+              (šema, RLS, triggeri, rate limit i geo RPC su u jednom fajlu.)
+            </li>
+            <li>
+              Klikni <b>Run</b>.
+            </li>
+          </ol>
+          <p class="footer">
+            Nakon ovoga tabele, RLS politike, rate limit i radius RPC su spremni.
+          </p>
+        </section>
+
+        <section class="card" id="resend">
+          <h2>5) Resend (OTP email)</h2>
+          <p>
+            OTP verifikacija profesionalnog upravnika koristi <b>Resend</b>
+            (ne Gmail API).
+          </p>
+          <ol class="steps">
+            <li>
+              Napravi nalog na Resend i uzmi <b>API key</b>.
+            </li>
+            <li>
+              Verifikuj sender/domain u Resend-u i izaberi <b>From</b> adresu.
+            </li>
+            <li>
+              U <code>.env.local</code> dodaj:
+              <pre>RESEND_API_KEY=...
+RESEND_FROM_EMAIL="Zgradonacelnik &lt;noreply@tvoj-domen.rs&gt;"</pre>
+            </li>
+          </ol>
+        </section>
+
+        <section class="card" id="storage">
+          <h2>6) Storage + signed URL download</h2>
+          <p>
+            Dokumenta se uploaduju server-side i čuvaju u Supabase Storage bucket-u.
+          </p>
+          <ol class="steps">
+            <li>
+              Supabase → <b>Storage</b> → <b>Create bucket</b>.
+            </li>
+            <li>
+              Bucket name: npr. <code>zgradonacelnik-private</code> → <b>Private</b>.
+            </li>
+            <li>
+              U <code>.env.local</code> dodaj:
+              <pre>SUPABASE_STORAGE_BUCKET="zgradonacelnik-private"
+SUPABASE_SERVICE_ROLE_KEY=...</pre>
+            </li>
+            <li>
+              U aplikaciji: <code>/zgrade/[id]/dokumenta</code> ima dugme
+              <b>Preuzmi</b> koje koristi signed URL endpoint.
+            </li>
+          </ol>
+        </section>
+
+        <section class="card" id="turnstile">
+          <h2>7) Turnstile CAPTCHA (opciono, preporučeno)</h2>
+          <p>
+            Ako postaviš Turnstile secret, captcha se proverava server-side na OTP,
+            recenzije, objave, predloge i komentare.
+          </p>
+          <ol class="steps">
+            <li>
+              Cloudflare dashboard → <b>Turnstile</b> → <b>Add site</b>.
+            </li>
+            <li>
+              Kopiraj <b>Site key</b> i <b>Secret key</b>.
+            </li>
+            <li>
+              U <code>.env.local</code> dodaj:
+              <pre>NEXT_PUBLIC_TURNSTILE_SITE_KEY=...
+TURNSTILE_SECRET_KEY=...</pre>
+            </li>
+          </ol>
+        </section>
+
+        <section class="card" id="mapbox">
+          <h2>8) Mapbox (opciono: geokodiranje + radius)</h2>
+          <ol class="steps">
+            <li>
+              Mapbox account → <b>Tokens</b> → uzmi <b>Access token</b>.
+            </li>
+            <li>
+              U <code>.env.local</code> dodaj:
+              <pre>MAPBOX_ACCESS_TOKEN=...</pre>
+            </li>
+            <li>
+              Kreiraj zgradu kroz <code>/dashboard/moje-zgrade/nova</code> —
+              backend će pokušati da upiše <code>latitude/longitude</code>.
+            </li>
+            <li>
+              Testiraj radius pretragu na <code>/pretraga/mapa</code>.
+            </li>
+          </ol>
+        </section>
+
+        <section class="card" id="vercel">
+          <h2>9) Deploy na Vercel</h2>
+          <ol class="steps">
+            <li>
+              Vercel → klik <b>New Project</b> → importuj Git repo.
+            </li>
+            <li>
+              U <b>Environment Variables</b> dodaj sve iz <code>.env.local</code>:
+              <pre>NEXT_PUBLIC_SITE_URL=https://&lt;tvoj-domain&gt;
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+SUPABASE_STORAGE_BUCKET=...
+RESEND_API_KEY=...
+RESEND_FROM_EMAIL=...
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=... (opciono)
+TURNSTILE_SECRET_KEY=... (opciono)
+MAPBOX_ACCESS_TOKEN=... (opciono)</pre>
+            </li>
+            <li>
+              Deploy → posle deploy-a proveri Google OAuth redirect URI da sadrži produkcioni domen:
+              <pre>https://&lt;tvoj-domain&gt;/auth/callback</pre>
+            </li>
+          </ol>
+        </section>
+
+        <section class="card" id="gmail-api">
+          <h2>10) Gmail API (opciono)</h2>
+          <p>
+            <span class="tag warn">napomena</span> Trenutni kod <b>ne koristi</b> Gmail API.
+            OTP email ide preko <b>Resend</b> (jednostavnije, stabilnije za MVP).
+          </p>
+          <p>
+            Ako želiš kasnije Gmail API (npr. slanje mailova sa tvog Google naloga),
+            treba dodati novu implementaciju slanja emaila i OAuth tok (ili service account).
+          </p>
+          <ol class="steps">
+            <li>
+              Google Cloud Console → <b>APIs & Services</b> → <b>Library</b> → enable <b>Gmail API</b>.
+            </li>
+            <li>
+              Credentials → napravi OAuth client + consent screen.
+            </li>
+            <li>
+              Implementirati u kodu novi mail provider (nije u ovom MVP-u).
+            </li>
+          </ol>
+        </section>
+      </div>
+
+      <div class="footer">
+        Tip: kad sve popuniš, test tokovi:
+        <ul>
+          <li>Login: <code>/login</code></li>
+          <li>Verifikacija upravnika: <code>/manager/verifikacija</code></li>
+          <li>Kreiranje zgrade: <code>/dashboard/moje-zgrade/nova</code></li>
+          <li>Radius: <code>/pretraga/mapa</code></li>
+        </ul>
+      </div>
+    </div>
+  </body>
+</html>
+

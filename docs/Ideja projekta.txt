@@ -1,0 +1,730 @@
+Napravi kompletnu web aplikaciju pod nazivom “Zgradonacelnik.rs”.
+
+Aplikacija je platforma za transparentno upravljanje stambenim zajednicama, evidenciju profesionalnih upravnika zgrada, recenzije upravnika i vođenje online “dnevnika zgrade”.
+
+Tehnološki stack:
+- Frontend: Next.js / React
+- Backend: Supabase
+- Baza: PostgreSQL kroz Supabase
+- Auth: Supabase Auth, obavezno Google login
+- Hosting: Vercel
+- Storage: Supabase Storage za dokumenta, zapisnike, fakture, slike i dokaze
+- Mapa: predvideti integraciju sa mapama za pretragu po lokaciji/radijusu
+- UI: moderan, čist, brz, mobile-first dizajn
+- Jezik aplikacije: srpski
+- Valuta: RSD
+- Vremenska zona: Europe/Belgrade
+
+Glavna ideja aplikacije:
+Zgradonacelnik.rs omogućava korisnicima da pronađu, ocene i recenziraju profesionalne upravnike zgrada, kao i da zgrade koje koriste platformu imaju transparentan prikaz poslovanja: troškovi, prihodi, stanje računa, transakcije, zapisnici, oglasna tabla, predlozi radova i istorija upravljanja.
+
+Aplikacija mora biti projektovana tako da bude brza, bezbedna, skalabilna i spremna za kasnije uvođenje plaćenih paketa za profesionalne upravnike.
+
+====================================
+1. TIPOVI KORISNIKA
+====================================
+
+Aplikacija treba da ima sledeće tipove korisnika:
+
+1. Običan korisnik / stanar
+- Registruje se preko Google naloga.
+- Može da pretražuje upravnike.
+- Može da pregleda javne profile upravnika.
+- Može da pregleda javne podatke o zgradama ako su javni.
+- Može da ostavi recenziju za upravnika ako je povezan sa zgradom u kojoj je taj upravnik aktivan ili je ranije bio aktivan.
+- Može da podnosi predloge za radove u svojoj zgradi.
+- Može da učestvuje u diskusiji/oglasnoj tabli zgrade ako je verifikovan kao stanar te zgrade.
+
+2. Profesionalni upravnik
+- Registruje se preko Google naloga.
+- Zatim mora da prođe posebnu verifikaciju kao profesionalni upravnik.
+- Verifikacija se radi na osnovu podataka iz javnog registra profesionalnih upravnika:
+  https://usluge.pks.rs/portal/registar-upravnika-zgrada
+- U registru postoje ime, prezime, kontakt telefon i/ili email profesionalnog upravnika.
+- Da bi korisnik bio verifikovan kao profesionalni upravnik, mora dokazati kontrolu nad email adresom ili brojem telefona koji je povezan sa njim u registru.
+- Verifikacija mora uključivati email OTP i/ili SMS OTP.
+- Nakon verifikacije dobija status “verifikovani profesionalni upravnik”.
+- Ako ima plaćeni paket, može da registruje i vodi zgrade koje održava.
+- Može da vodi online dnevnik zgrade.
+- Može da unosi prihode, rashode, prilive, odlive, stanje računa, dokumentaciju, zapisnike, obaveštenja i dokaze.
+- Svaka finansijska stavka mora imati pisani trag i mogućnost dodavanja dokaza.
+- Upravnik mora prihvatiti pravila da unosi tačne, potpune i ažurne podatke.
+
+3. Administrator platforme
+- Ima pregled svih korisnika, upravnika, zgrada, recenzija, prijava i verifikacija.
+- Može da odobri, odbije ili ručno proveri verifikaciju upravnika.
+- Može da moderira recenzije, prijave, zgrade, korisnike i dokumentaciju.
+- Može da deaktivira naloge koji krše pravila.
+- Može da vidi logove aktivnosti.
+- Može da upravlja plaćenim paketima.
+
+====================================
+2. AUTENTIFIKACIJA I BEZBEDNOST
+====================================
+
+Registracija korisnika:
+- Obavezno omogućiti Google login preko Supabase Auth.
+- Nakon prvog logovanja korisnik popunjava osnovni profil:
+  - ime
+  - prezime
+  - prikazano ime
+  - telefon, opciono
+  - opština/grad, opciono
+  - tip korisnika: stanar / profesionalni upravnik / drugo
+
+Zaštite:
+- Ne dozvoliti spam naloge.
+- Koristiti rate limiting za:
+  - login pokušaje
+  - kreiranje recenzija
+  - slanje komentara
+  - upload fajlova
+  - slanje OTP kodova
+  - kreiranje zgrada
+  - slanje prijava
+- Dodati CAPTCHA ili sličnu zaštitu na osetljive forme.
+- Koristiti Supabase RLS policies.
+- Svaka tabela mora imati jasno definisane Row Level Security politike.
+- Korisnik sme da vidi samo podatke koje ima pravo da vidi.
+- Profesionalni upravnik sme da menja samo zgrade koje su povezane sa njegovim nalogom.
+- Stanar sme da piše u zgradi samo ako je povezan/verifikovan sa tom zgradom.
+- Admin sme da vidi sve.
+- Dodati audit log za važne akcije.
+- Ne čuvati nepotrebne lične podatke.
+- Ne prikazivati javno email i telefon korisnika bez potrebe.
+- Za dokumenta koristiti privatne bucket-e i signed URL pristup.
+- Validirati sve ulaze na server strani.
+- Zaštititi aplikaciju od XSS, SQL injection, CSRF i abuse scenarija.
+- Sve korisničke unose tretirati kao nepoverljive.
+- Dodati sistem prijave zloupotrebe.
+
+====================================
+3. VERIFIKACIJA PROFESIONALNOG UPRAVNIKA
+====================================
+
+Potrebno je napraviti modul za verifikaciju profesionalnog upravnika.
+
+Logika:
+- Korisnik bira opciju “Registruj se kao profesionalni upravnik”.
+- Unosi ime, prezime i eventualno broj licence ili podatke iz registra ako postoje.
+- Sistem proverava podatke u lokalnoj tabeli/importovanom registru profesionalnih upravnika.
+- Registar se puni iz javnog izvora:
+  https://usluge.pks.rs/portal/registar-upravnika-zgrada
+- Za MVP, omogućiti ručni import CSV/JSON liste profesionalnih upravnika.
+- Kasnije predvideti scraper/import job ako je pravno i tehnički dozvoljeno.
+- Korisnik mora potvrditi email ili telefon koji odgovara podacima iz registra.
+- Ako se email ili telefon poklapa, poslati OTP kod.
+- Ako korisnik uspešno potvrdi OTP, status postaje “verified_manager”.
+- Ako nema podudaranja, zahtev ide na ručnu proveru administratora.
+
+Statusi verifikacije:
+- not_requested
+- pending
+- verified
+- rejected
+- needs_manual_review
+- expired
+
+Tabela professional_manager_registry treba da sadrži:
+- id
+- full_name
+- first_name
+- last_name
+- license_number, ako postoji
+- email, ako postoji
+- phone, ako postoji
+- municipality, ako postoji
+- source_url
+- imported_at
+- raw_data JSONB
+- normalized_email
+- normalized_phone
+
+Tabela manager_verification_requests:
+- id
+- user_id
+- registry_id
+- requested_email
+- requested_phone
+- verification_method: email / phone / manual
+- status
+- otp_hash
+- otp_expires_at
+- attempts_count
+- reviewed_by
+- reviewed_at
+- rejection_reason
+- created_at
+- updated_at
+
+====================================
+4. ZGRADE I JEDNOZNAČNO ODREĐIVANJE ADRESE
+====================================
+
+Veoma je bitno sprečiti duple zgrade i omogućiti jednoznačno određivanje adrese.
+
+Tabela buildings:
+- id
+- country
+- city
+- municipality
+- settlement
+- street
+- street_normalized
+- street_number
+- entrance
+- postal_code
+- latitude
+- longitude
+- address_hash
+- cadastral_info, opciono
+- building_name, opciono
+- status: unverified / verified / disputed / archived
+- created_by
+- created_at
+- updated_at
+
+Pravila:
+- Adresa mora biti normalizovana.
+- Potrebno je napraviti address_hash na osnovu:
+  country + city + municipality + street_normalized + street_number + entrance
+- Sprečiti duplikate preko unique constraint-a na address_hash.
+- Ako korisnik pokuša da unese sličnu adresu, sistem treba da ponudi postojeću zgradu.
+- Podržati zgrade sa više ulaza.
+- Omogućiti da jedna fizička zgrada ima više ulaza ako je potrebno.
+- Kasnije predvideti integraciju sa adresnim registrom / geokodiranjem.
+
+Tabela building_memberships:
+- id
+- building_id
+- user_id
+- role: resident / owner / tenant / board_member / manager / former_manager
+- verification_status: unverified / pending / verified / rejected
+- verification_method: admin / document / invite_code / manager_invite / resident_confirmation
+- apartment_label, opciono
+- created_at
+- updated_at
+
+====================================
+5. VEZIVANJE UPRAVNIKA ZA ZGRADU
+====================================
+
+Profesionalni upravnik može da doda zgradu koju održava samo ako:
+- ima verifikovan status profesionalnog upravnika
+- ima aktivan plaćeni paket ako je funkcionalnost zaključana
+- potvrdi da ima ovlašćenje za tu zgradu
+- uploaduje dokument kao dokaz, npr. odluku skupštine, ugovor ili drugi dokaz
+
+Tabela building_manager_assignments:
+- id
+- building_id
+- manager_user_id
+- status: pending / active / rejected / ended / disputed
+- start_date
+- end_date
+- proof_document_id
+- approved_by
+- approved_at
+- created_at
+- updated_at
+
+Mora se čuvati istorija upravljanja:
+- aktivni upravnik
+- bivši upravnici
+- period upravljanja
+- recenzije iz tog perioda
+- finansijski dnevnici povezani sa periodom upravljanja
+
+====================================
+6. RECENZIJE UPRAVNIKA
+====================================
+
+Aplikacija u startu mora imati jak sistem recenzija profesionalnih upravnika.
+
+Korisnici mogu da ocenjuju upravnika samo ako:
+- su povezani sa zgradom u kojoj je taj upravnik aktivan ili je bio aktivan
+- ili mogu dokazati da su stanari/vlasnici te zgrade
+- sistem treba da spreči lažne i spam recenzije
+
+Tabela manager_reviews:
+- id
+- manager_user_id
+- building_id
+- reviewer_user_id
+- rating_overall 1-5
+- rating_transparency 1-5
+- rating_communication 1-5
+- rating_responsiveness 1-5
+- rating_price_quality 1-5
+- title
+- content
+- status: pending / published / hidden / removed / disputed
+- is_anonymous_publicly boolean
+- created_at
+- updated_at
+
+Pravila:
+- Jedan korisnik može ostaviti samo jednu aktivnu recenziju po upravniku i zgradi.
+- Može izmeniti svoju recenziju.
+- Mora postojati moderation status.
+- Upravnik može da odgovori na recenziju.
+- Korisnici mogu prijaviti spornu recenziju.
+- Admin može sakriti ili ukloniti recenziju.
+- Čuvati istorijske recenzije čak i kada upravnik više nije aktivan u zgradi.
+- Prikazivati prosečnu ocenu, broj recenzija i raspodelu ocena.
+
+Tabela review_replies:
+- id
+- review_id
+- manager_user_id
+- content
+- status
+- created_at
+- updated_at
+
+Tabela review_reports:
+- id
+- review_id
+- reported_by
+- reason
+- details
+- status
+- created_at
+- resolved_at
+
+====================================
+7. PRETRAGA UPRAVNIKA
+====================================
+
+Napraviti fenomenalnu pretragu upravnika.
+
+Korisnik mora moći da pretražuje po:
+- imenu i prezimenu
+- opštini
+- gradu
+- prosečnoj oceni
+- broju recenzija
+- aktivnim zgradama
+- istorijskim zgradama
+- dostupnosti za nove zgrade
+- radiusu na mapi
+- transparentnosti
+- komunikaciji
+- ažurnosti
+- ceni, ako postoji
+- verifikovanom statusu
+- plaćenom/transparentnom profilu
+
+Sortiranje:
+- najbolja ocena
+- najviše recenzija
+- najbliži
+- najaktivniji
+- najtransparentniji
+- najnovije recenzije
+
+Za performanse:
+- Koristiti PostgreSQL indekse.
+- Koristiti full-text search gde ima smisla.
+- Koristiti trigram search za imena, opštine i ulice.
+- Koristiti geografske koordinate za radius search.
+- Predvideti materialized view ili denormalizovanu tabelu manager_stats za brzu pretragu.
+
+Tabela manager_stats:
+- manager_user_id
+- average_rating
+- review_count
+- transparency_rating
+- communication_rating
+- responsiveness_rating
+- active_buildings_count
+- historical_buildings_count
+- last_review_at
+- municipalities JSONB
+- search_vector
+
+====================================
+8. ONLINE DNEVNIK ZGRADE
+====================================
+
+Ako upravnik ima plaćeni paket, može da vodi online dnevnik zgrade.
+
+Dnevnik zgrade obuhvata:
+- finansijske transakcije
+- stanje računa
+- prilive
+- odlive
+- fakture
+- račune
+- zapisnike
+- odluke skupštine
+- obaveštenja
+- predloge radova
+- evidenciju radova
+- komentare stanara
+- oglasnu tablu
+
+Pravila:
+- Svaki priliv i odliv mora imati:
+  - datum
+  - iznos
+  - tip transakcije
+  - opis
+  - kategoriju
+  - dokaz/dokument, ako je potreban
+  - ko je uneo
+  - vreme unosa
+- Ne sme biti brisanja bez traga.
+- Ako se stavka menja, čuvati istoriju izmena.
+- Finansijska stavka može biti poništena/stornirana, ali ne fizički obrisana.
+- Stanari treba da vide finansije svoje zgrade ako je zgrada uključena u transparentan režim.
+- Javni prikaz mora biti ograničen i ne sme izlagati privatne podatke stanara.
+
+Tabela building_financial_accounts:
+- id
+- building_id
+- account_name
+- bank_name
+- account_number_masked
+- current_balance
+- balance_date
+- visibility: private / residents_only / public_summary
+- created_at
+- updated_at
+
+Tabela building_transactions:
+- id
+- building_id
+- manager_user_id
+- account_id
+- transaction_type: inflow / outflow
+- category
+- amount
+- currency
+- transaction_date
+- description
+- counterparty_name
+- counterparty_type
+- document_id
+- visibility: residents_only / public_summary / private
+- status: active / corrected / cancelled
+- created_by
+- created_at
+- updated_at
+
+Tabela transaction_audit_log:
+- id
+- transaction_id
+- changed_by
+- action: created / updated / cancelled / document_added
+- old_data JSONB
+- new_data JSONB
+- created_at
+
+Tabela building_documents:
+- id
+- building_id
+- uploaded_by
+- document_type: invoice / receipt / contract / meeting_minutes / decision / bank_statement / photo / other
+- title
+- description
+- file_path
+- file_name
+- mime_type
+- file_size
+- visibility: residents_only / managers_only / public / private
+- created_at
+
+====================================
+9. OGLASNA TABLA I PREDLOZI RADOVA
+====================================
+
+Napraviti online oglasnu tablu za svaku zgradu.
+
+Tabela building_announcements:
+- id
+- building_id
+- created_by
+- title
+- content
+- visibility: residents_only / public
+- pinned boolean
+- created_at
+- updated_at
+
+Tabela building_proposals:
+- id
+- building_id
+- created_by
+- title
+- description
+- category: repair / cleaning / security / maintenance / finance / other
+- status: proposed / under_review / accepted / rejected / completed
+- estimated_cost
+- priority: low / medium / high / urgent
+- created_at
+- updated_at
+
+Tabela proposal_comments:
+- id
+- proposal_id
+- user_id
+- content
+- created_at
+- updated_at
+
+Kasnije predvideti glasanje stanara o predlozima, ali za MVP može samo komentarisanje i statusi.
+
+====================================
+10. PLAĆENI MOD ZA UPRAVNIKE
+====================================
+
+Aplikacija treba da predvidi plaćeni režim za profesionalne upravnike.
+
+Besplatno:
+- profil upravnika
+- prikaz u pretrazi
+- primanje recenzija
+- osnovni odgovor na recenzije
+
+Plaćeno:
+- dodavanje zgrada
+- vođenje online dnevnika zgrade
+- upload dokumenata
+- finansijski pregled
+- oglasna tabla
+- predlozi radova
+- napredna statistika
+- transparentni profil
+
+Tabela subscription_plans:
+- id
+- name
+- price_monthly
+- max_buildings
+- features JSONB
+- active boolean
+
+Tabela user_subscriptions:
+- id
+- user_id
+- plan_id
+- status: active / trialing / past_due / cancelled / expired
+- started_at
+- expires_at
+- payment_provider
+- payment_provider_subscription_id
+
+Za MVP ne mora odmah implementirati plaćanje, ali arhitektura mora biti spremna.
+
+====================================
+11. ADMIN PANEL
+====================================
+
+Napraviti admin panel.
+
+Admin može:
+- pregled korisnika
+- pregled profesionalnih upravnika
+- pregled zahteva za verifikaciju
+- pregled zgrada
+- pregled prijava
+- pregled recenzija
+- ručno odobravanje/verifikacija upravnika
+- ručno odobravanje veze upravnik-zgrada
+- moderacija recenzija
+- pregled audit logova
+- deaktivacija korisnika
+- upravljanje planovima
+
+Admin panel mora biti zaštićen RLS pravilima i dodatnom proverom role.
+
+====================================
+12. PRAVILA I PRAVNI TEKSTOVI U APLIKACIJI
+====================================
+
+Dodati stranice:
+- Uslovi korišćenja
+- Politika privatnosti
+- Pravila za upravnike
+- Pravila za recenzije
+- Pravila transparentnog vođenja zgrade
+- Kontakt
+- Prijava zloupotrebe
+
+U pravilima za upravnike mora pisati da:
+- upravnik garantuje da su podaci koje unosi tačni, potpuni i ažurni
+- upravnik garantuje da ima ovlašćenje za zgradu koju dodaje
+- upravnik je odgovoran za neistinite, nepotpune ili obmanjujuće podatke
+- svaka finansijska stavka treba da ima pisani trag
+- podaci ne smeju kršiti privatnost stanara
+- platforma nije sudski organ, već alat za transparentnost i evidenciju
+- zloupotrebe mogu dovesti do suspenzije naloga
+
+====================================
+13. PERFORMANSE
+====================================
+
+Aplikacija mora biti optimizovana od starta.
+
+Zahtevi:
+- Koristiti pagination na svim listama.
+- Koristiti lazy loading.
+- Optimizovati slike i dokumente.
+- Koristiti cache za javne profile upravnika.
+- Koristiti indekse na kolonama koje se često pretražuju.
+- Koristiti denormalizovane agregate za ocene i statistike.
+- Ne računati prosečne ocene skupo pri svakom request-u.
+- Koristiti server-side filtering.
+- Ne učitavati sve recenzije odjednom.
+- Ne učitavati sve dokumente odjednom.
+- Koristiti signed URL samo kada treba pristup fajlu.
+- Izbegavati nepotrebne realtime subscribere.
+- Realtime koristiti samo za oglasnu tablu/komentare ako bude potrebno.
+
+====================================
+14. PREDLOŽENA STRUKTURA STRANICA
+====================================
+
+Javne stranice:
+- /
+- /upravnik
+- /upravnik/[id]
+- /pretraga
+- /zgrade
+- /zgrade/[id]
+- /login
+- /registracija
+- /pravila
+- /privatnost
+- /kontakt
+
+Korisnički dashboard:
+- /dashboard
+- /dashboard/profil
+- /dashboard/moje-zgrade
+- /dashboard/recenzije
+- /dashboard/predlozi
+- /dashboard/podesavanja
+
+Dashboard profesionalnog upravnika:
+- /manager
+- /manager/verifikacija
+- /manager/zgrade
+- /manager/zgrade/[id]
+- /manager/zgrade/[id]/finansije
+- /manager/zgrade/[id]/dokumenta
+- /manager/zgrade/[id]/oglasna-tabla
+- /manager/zgrade/[id]/predlozi
+- /manager/recenzije
+- /manager/pretplata
+
+Admin:
+- /admin
+- /admin/users
+- /admin/managers
+- /admin/verifications
+- /admin/buildings
+- /admin/reviews
+- /admin/reports
+- /admin/audit-log
+- /admin/subscriptions
+
+====================================
+15. MVP FAZA
+====================================
+
+Prvo napravi MVP verziju sa sledećim funkcionalnostima:
+
+MVP 1:
+- Google login
+- korisnički profil
+- registracija kao običan korisnik
+- zahtev za verifikaciju profesionalnog upravnika
+- ručni import registra profesionalnih upravnika
+- email verifikacija upravnika
+- javni profil upravnika
+- pretraga upravnika
+- dodavanje recenzije
+- odgovor upravnika na recenziju
+- admin moderacija recenzija
+- admin odobravanje upravnika
+
+MVP 2:
+- dodavanje zgrada
+- jednoznačna adresa i zaštita od duplikata
+- veza upravnik-zgrada
+- istorija upravljanja
+- povezivanje stanara sa zgradom
+- recenzije vezane za konkretnu zgradu
+
+MVP 3:
+- online dnevnik zgrade
+- finansijske transakcije
+- upload dokumenata
+- audit log izmena
+- oglasna tabla
+- predlozi radova
+- osnovni transparentni pregled za stanare
+
+MVP 4:
+- plaćeni paketi
+- napredna pretraga
+- mapa i radius search
+- javni transparentni profili zgrada
+- statistika upravnika
+
+====================================
+16. DIZAJN
+====================================
+
+Dizajn treba da bude:
+- moderan
+- ozbiljan
+- poverljiv
+- pravno/administrativno čist
+- lak za korišćenje starijim korisnicima
+- mobile-first
+- pregledan na telefonu
+
+Vizuelni stil:
+- bela/svetla pozadina
+- tamnoplava ili zelena kao glavna boja
+- kartice za upravnike
+- jasne ocene zvezdicama
+- filteri sa leve strane ili kao collapsible filter na mobilnom
+- mapa kao poseban prikaz
+- jasni status badge elementi: Verifikovan, Transparentan, Aktivni upravnik, Bivši upravnik, Sporna recenzija itd.
+
+====================================
+17. NAJBITNIJA PRAVILA ZA IMPLEMENTACIJU
+====================================
+
+Ne pravi samo frontend mockup.
+Potrebno je napraviti realnu aplikacionu arhitekturu sa Supabase tabelama, RLS pravilima, komponentama, servisima i osnovnim stranicama.
+
+Posebno obrati pažnju na:
+- sprečavanje duplih korisnika
+- sprečavanje duplih zgrada
+- sigurnu verifikaciju profesionalnih upravnika
+- zaštitu privatnih podataka
+- jaku pretragu
+- performanse
+- audit log
+- dokumentovanje finansijskih unosa
+- moderaciju recenzija
+- skalabilnost za veliki broj zgrada i upravnika
+
+Napravi prvo:
+1. bazni database schema za Supabase
+2. RLS politike
+3. auth flow
+4. glavne React/Next.js stranice
+5. admin panel osnovu
+6. dashboard za upravnika
+7. javnu pretragu upravnika
+8. sistem recenzija
+9. osnovni model zgrada
+10. pripremu za dnevnik zgrade
+
+Kod treba da bude čist, modularan i spreman za proširenje.
