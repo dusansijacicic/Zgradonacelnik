@@ -43,6 +43,18 @@ export default async function AdminHomePage() {
             >
               Moderacija recenzija →
             </Link>
+            <Link
+              href="/admin/zgrade-upravnici"
+              className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-4 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
+            >
+              Zgrade ↔ upravnici (odobravanja) →
+            </Link>
+            <Link
+              href="/admin/vezivanje-model"
+              className="rounded-xl border border-zinc-200 bg-white px-4 py-4 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
+            >
+              Kako rade veze član–zgrada–upravnik →
+            </Link>
           </div>
         </div>
       </main>

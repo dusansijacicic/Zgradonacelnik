@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import AdminAssignmentsClient from "./ui";
@@ -30,7 +31,10 @@ export default async function AdminAssignmentsPage() {
             Upravnik ↔ zgrada (odobravanja)
           </h1>
           <p className="mt-2 text-sm text-zinc-600">
-            Pending zahtevi i aktivne/ended veze.
+            Pending zahtevi i aktivne/ended veze.{" "}
+            <Link href="/admin/vezivanje-model" className="font-medium text-emerald-800 underline-offset-2 hover:underline">
+              Objašnjenje modela veza →
+            </Link>
           </p>
           <AdminAssignmentsClient rows={rows ?? []} />
         </div>
