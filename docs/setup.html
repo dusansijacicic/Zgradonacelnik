@@ -243,15 +243,42 @@
               Klik <b>Create Credentials</b> → <b>OAuth client ID</b> → Application type: <b>Web application</b>.
             </li>
             <li>
-              Dodaj Authorized redirect URIs:
-              <pre>http://localhost:3000/auth/callback
-https://&lt;tvoj-domain&gt;/auth/callback</pre>
+              U Google Cloud → OAuth client → <b>Authorized redirect URIs</b> mora tačno ono što
+              <b>Google šalje kao redirect_uri</b> — kod Supabase Auth to je <b>Supabase</b> callback,
+              ne tvoj Next.js sajt:
+              <pre>https://&lt;PROJECT_REF&gt;.supabase.co/auth/v1/callback</pre>
+              <code>PROJECT_REF</code> je deo URL-a projekta (Supabase → Settings → API → Project URL).
+              Nakon prijave Supabase te preusmeri na aplikaciju (<code>/auth/callback</code>) sam.
+            </li>
+            <li>
+              Pod <b>Authorized JavaScript origins</b> možeš dodati npr.:
+              <pre>http://localhost:3000
+https://&lt;tvoj-produkcioni-domen&gt;</pre>
+              (pomaže za neke tokove; redirect i dalje mora biti <code>…supabase.co/auth/v1/callback</code> gore.)
             </li>
             <li>
               Sačuvaj → kopiraj <b>Client ID</b> i <b>Client secret</b>.
             </li>
             <li>
               Vrati se u Supabase Google provider i nalepi Client ID/Secret → <b>Save</b>.
+            </li>
+            <li>
+              <b>Produkcija / Vercel:</b> Supabase → <b>Authentication</b> → <b>URL Configuration</b>:
+              <ul>
+                <li>
+                  <b>Site URL</b> = javni URL aplikacije (npr.
+                  <code>https://tvoj-projekat.vercel.app</code>), <i>ne</i> samo
+                  <code>http://localhost:3000</code> — inače linkovi iz mejla ili redirect posle
+                  prijave vode na localhost.
+                </li>
+                <li>
+                  <b>Redirect URLs</b>: dodaj
+                  <code>https://tvoj-projekat.vercel.app/**</code> i
+                  <code>http://localhost:3000/**</code> za lokalno.
+                </li>
+              </ul>
+              U Vercel <b>Environment Variables</b> postavi
+              <code>NEXT_PUBLIC_SITE_URL</code> na isti produkcioni URL.
             </li>
           </ol>
         </section>
@@ -382,8 +409,10 @@ TURNSTILE_SECRET_KEY=... (opciono)
 MAPBOX_ACCESS_TOKEN=... (opciono)</pre>
             </li>
             <li>
-              Deploy → posle deploy-a proveri Google OAuth redirect URI da sadrži produkcioni domen:
-              <pre>https://&lt;tvoj-domain&gt;/auth/callback</pre>
+              Deploy: Google <b>Authorized redirect URIs</b> i dalje koriste samo
+              <pre>https://&lt;PROJECT_REF&gt;.supabase.co/auth/v1/callback</pre>
+              (isti kao za lokalni razvoj). U Supabase → Auth → URL configuration proveri da je
+              <b>Site URL</b> produkcioni domen ako treba finalni redirect korisnika.
             </li>
           </ol>
         </section>

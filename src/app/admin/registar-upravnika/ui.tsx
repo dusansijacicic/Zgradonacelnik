@@ -1,8 +1,10 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export default function RegistryImportClient() {
+  const router = useRouter();
   const [csv, setCsv] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -19,6 +21,7 @@ export default function RegistryImportClient() {
       const json = (await res.json()) as { error?: string; inserted?: number };
       if (!res.ok) throw new Error(json?.error ?? "Greška");
       setMsg(`Import OK: ${json.inserted} redova.`);
+      router.refresh();
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : "Greška");
     } finally {
@@ -47,6 +50,7 @@ export default function RegistryImportClient() {
         `Solidus: ubačeno ${json.inserted} redova (parsirano ${json.parsed_rows}). ` +
           `Obrisano prethodnih sa istim izvorom: ${json.deleted_previous ?? 0}.`,
       );
+      router.refresh();
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : "Greška");
     } finally {

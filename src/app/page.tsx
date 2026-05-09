@@ -1,4 +1,21 @@
-export default function Home() {
+import { redirect } from "next/navigation";
+
+type HomeProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+/** Supabase ponekad vrati na /?code=… umesto na /auth/callback — prebacimo na rutu koja razmeni kod. */
+export default async function Home({ searchParams }: HomeProps) {
+  const sp = await searchParams;
+  const code = sp.code;
+  if (typeof code === "string" && code.length > 0) {
+    const next = typeof sp.next === "string" ? sp.next : "/dashboard";
+    const q = new URLSearchParams();
+    q.set("code", code);
+    q.set("next", next);
+    redirect(`/auth/callback?${q.toString()}`);
+  }
+
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-12 sm:py-16">
       <main className="w-full max-w-3xl rounded-2xl border border-border-subtle bg-surface p-6 shadow-md sm:p-8">
