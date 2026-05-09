@@ -4,7 +4,8 @@ import { useState } from "react";
 
 type ReviewRow = {
   id: string;
-  manager_user_id: string;
+  manager_user_id: string | null;
+  registry_id: number | null;
   reviewer_user_id: string;
   rating_overall: number;
   title: string | null;
@@ -52,9 +53,9 @@ export default function AdminReviewsClient({ reviews }: { reviews: ReviewRow[] }
                   {r.title ?? "Bez naslova"} • {r.rating_overall}/5
                 </div>
                 <div className="mt-1 text-xs text-zinc-500">
-                  status: {r.status} • manager: {r.manager_user_id} • reviewer:{" "}
-                  {r.reviewer_user_id} •{" "}
-                  {new Date(r.created_at).toLocaleString("sr-RS")}
+                  status: {r.status} • cilj:{" "}
+                  {r.manager_user_id ? `user ${r.manager_user_id}` : r.registry_id != null ? `registar #${r.registry_id}` : "—"}{" "}
+                  • reviewer: {r.reviewer_user_id} • {new Date(r.created_at).toLocaleString("sr-RS")}
                 </div>
               </div>
               <div className="flex gap-2">

@@ -35,15 +35,31 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return response;
 
+  const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const addrObj = meta.address;
+  const oauthAddressLine =
+    (typeof meta.formatted_address === "string" && meta.formatted_address.trim()) ||
+    (typeof addrObj === "object" &&
+      addrObj !== null &&
+      typeof (addrObj as { formatted_address?: unknown }).formatted_address === "string" &&
+      String((addrObj as { formatted_address: string }).formatted_address).trim()) ||
+    null;
+
   // Ensure user_profiles exists (RLS allows "insert self")
   await supabase.from("user_profiles").upsert(
     {
       user_id: user.id,
       display_name:
-        user.user_metadata?.full_name ??
-        user.user_metadata?.name ??
+        (typeof meta.full_name === "string" ? meta.full_name : null) ??
+        (typeof meta.name === "string" ? meta.name : null) ??
         user.email ??
         "Korisnik",
+      ...(oauthAddressLine
+        ? {
+            oauth_address_line: oauthAddressLine,
+            oauth_address_synced_at: new Date().toISOString(),
+          }
+        : {}),
     },
     { onConflict: "user_id" },
   );

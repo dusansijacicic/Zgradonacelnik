@@ -18,7 +18,9 @@ export default async function AdminReviewsPage() {
 
   const { data: reviews } = await supabase
     .from("manager_reviews")
-    .select("id, manager_user_id, reviewer_user_id, rating_overall, title, content, status, created_at")
+    .select(
+      "id, manager_user_id, registry_id, reviewer_user_id, rating_overall, title, content, status, created_at",
+    )
     .order("created_at", { ascending: false })
     .limit(200);
 

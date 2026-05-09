@@ -5,10 +5,16 @@ import { useState } from "react";
 export default function ReportReviewClient({
   reviewId,
   managerId,
+  profileBackHref,
+  profileBackLabel,
 }: {
   reviewId: string;
-  managerId: string;
+  managerId?: string;
+  profileBackHref?: string;
+  profileBackLabel?: string;
 }) {
+  const backHref = profileBackHref ?? (managerId ? `/upravnik/${managerId}` : "/pretraga");
+  const backLabel = profileBackLabel ?? "profil upravnika";
   const [reason, setReason] = useState("spam");
   const [details, setDetails] = useState("");
   const [busy, setBusy] = useState(false);
@@ -40,8 +46,8 @@ export default function ReportReviewClient({
   if (!reviewId) {
     return (
       <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
-        Nedostaje `review_id` u URL-u. Vrati se na profil upravnika{" "}
-        <a className="underline underline-offset-4" href={`/upravnik/${managerId}`}>
+        Nedostaje `review_id` u URL-u. Vrati se na {backLabel}{" "}
+        <a className="underline underline-offset-4" href={backHref}>
           ovde
         </a>
         .

@@ -3,7 +3,15 @@
 import { useState } from "react";
 import TurnstileWidget from "@/components/TurnstileWidget";
 
-export default function ReviewClient({ managerId }: { managerId: string }) {
+export default function ReviewClient({
+  managerUserId,
+  registryId,
+  buildingId,
+}: {
+  managerUserId?: string;
+  registryId?: number;
+  buildingId?: string | null;
+}) {
   const [rating, setRating] = useState(5);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -15,16 +23,20 @@ export default function ReviewClient({ managerId }: { managerId: string }) {
     setBusy(true);
     setMsg(null);
     try {
+      const payload: Record<string, unknown> = {
+        rating_overall: rating,
+        title,
+        content,
+        captcha_token: captchaToken,
+      };
+      if (managerUserId) payload.manager_user_id = managerUserId;
+      if (registryId != null) payload.registry_id = registryId;
+      if (buildingId) payload.building_id = buildingId;
+
       const res = await fetch("/api/reviews/create", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          manager_user_id: managerId,
-          rating_overall: rating,
-          title,
-          content,
-          captcha_token: captchaToken,
-        }),
+        body: JSON.stringify(payload),
       });
       const json = (await res.json()) as any;
       if (!res.ok) throw new Error(json?.error ?? "Greška");

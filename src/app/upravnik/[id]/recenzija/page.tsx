@@ -24,7 +24,7 @@ export default async function LeaveReviewPage({
           MVP: forma za recenziju (više kriterijuma) + vezivanje za zgradu ako si
           verifikovan član te zgrade u relevantnom periodu.
         </p>
-        <ReviewClient managerId={id} />
+        <ReviewClient managerUserId={id} />
       </main>
     </div>
   );

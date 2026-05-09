@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import AssignmentRequestClient from "./ui";
+import RegistryManagerSuggestClient from "./suggest-registry-ui";
 
 export default async function BuildingPage({
   params,
@@ -91,6 +92,15 @@ export default async function BuildingPage({
               profile?.professional_manager_status === "verified"
             }
           />
+
+          {membership?.verification_status === "verified" ? (
+            <RegistryManagerSuggestClient buildingId={id} />
+          ) : (
+            <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
+              Kada admin verifikuje tvoje članstvo u zgradi, ovde ćeš moći da predložiš upravnika iz
+              državnog registra (čak i ako još nema nalog na platformi).
+            </div>
+          )}
         </div>
       </main>
     </div>
