@@ -1,19 +1,16 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { LogoutButton } from "@/components/LogoutButton";
 
 export default async function ProfilePage() {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const { data: profile } = await supabase
     .from("user_profiles")
-    .select(
-      "oauth_address_line, oauth_address_synced_at, city, municipality, google_phone_raw, google_phone_normalized, google_identity_synced_at, first_name, last_name",
-    )
+    .select("display_name, first_name, last_name, oauth_address_line, oauth_address_synced_at, city, municipality, google_phone_raw, google_phone_normalized, google_identity_synced_at")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -24,64 +21,82 @@ export default async function ProfilePage() {
     return `••••${d.slice(-4)}`;
   };
 
+  const displayName =
+    profile?.display_name ||
+    [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") ||
+    user.email;
+
   return (
     <div className="flex flex-1 justify-center bg-zinc-50 px-4 py-10">
-      <main className="w-full max-w-2xl rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <h1 className="text-xl font-semibold tracking-tight text-zinc-900">
-          Profil
-        </h1>
-        <p className="mt-2 text-sm text-zinc-600">
-          Prikazano ime i adresa sa Google naloga (ako ih provajder pošalje u JWT) sinhronizuju se pri
-          prijavi. Grad/opština u profilu na platformi su zasebna polja kada ih uvedemo u obrasci.
-        </p>
-        <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm">
-          <div className="font-medium text-zinc-900">Nalog</div>
-          <div className="mt-1 text-zinc-700 break-all">{user.id}</div>
-          <div className="mt-1 text-zinc-700 break-all">{user.email}</div>
-          {profile?.first_name || profile?.last_name ? (
-            <div className="mt-3 text-zinc-800">
-              <span className="text-xs font-medium text-zinc-500">Ime (iz Google / profila)</span>
-              <div className="mt-0.5">
-                {[profile.first_name, profile.last_name].filter(Boolean).join(" ") || "—"}
+      <main className="w-full max-w-2xl space-y-4">
+
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard" className="text-sm text-zinc-500 hover:text-zinc-800">← Dashboard</Link>
+        </div>
+
+        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight text-zinc-900">Moj profil</h1>
+              <p className="mt-0.5 text-sm text-zinc-500">{user.email}</p>
+            </div>
+            <LogoutButton className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50" />
+          </div>
+
+          <div className="mt-6 divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-zinc-50">
+            <div className="px-4 py-3">
+              <div className="text-xs font-medium text-zinc-500">Ime i prezime</div>
+              <div className="mt-0.5 text-sm text-zinc-900">
+                {displayName ?? "—"}
               </div>
             </div>
-          ) : null}
-          {maskPhone(profile?.google_phone_raw) ? (
-            <div className="mt-3 border-t border-zinc-200 pt-3">
+
+            <div className="px-4 py-3">
+              <div className="text-xs font-medium text-zinc-500">Email</div>
+              <div className="mt-0.5 text-sm text-zinc-900 break-all">{user.email}</div>
+            </div>
+
+            <div className="px-4 py-3">
               <div className="text-xs font-medium text-zinc-500">Telefon (Google, maskiran)</div>
-              <div className="mt-0.5 font-mono text-zinc-800">{maskPhone(profile?.google_phone_raw)}</div>
-              {profile?.google_identity_synced_at ? (
-                <div className="mt-1 text-xs text-zinc-500">
+              <div className="mt-0.5 text-sm font-mono text-zinc-900">
+                {maskPhone(profile?.google_phone_raw) ?? (
+                  <span className="font-sans text-zinc-400 italic">Nije sinhronizovan</span>
+                )}
+              </div>
+              {profile?.google_identity_synced_at && (
+                <div className="mt-0.5 text-xs text-zinc-400">
                   Sinhronizacija: {new Date(profile.google_identity_synced_at).toLocaleString("sr-RS")}
                 </div>
-              ) : null}
+              )}
             </div>
-          ) : (
-            <div className="mt-3 border-t border-zinc-200 pt-3 text-xs text-zinc-500">
-              Broj telefona još nije učitan iz Google naloga — potrebna je prijava sa dozvolama za telefon
-              (People API).
+
+            <div className="px-4 py-3">
+              <div className="text-xs font-medium text-zinc-500">Adresa iz Google naloga</div>
+              <div className="mt-0.5 text-sm text-zinc-900">
+                {profile?.oauth_address_line ?? (
+                  <span className="text-zinc-400 italic">Nije dostupna</span>
+                )}
+              </div>
             </div>
-          )}
-          {profile?.oauth_address_line ? (
-            <div className="mt-4 border-t border-zinc-200 pt-3">
-              <div className="text-xs font-medium text-zinc-500">Adresa iz Google naloga (JWT)</div>
-              <div className="mt-1 text-zinc-800">{profile.oauth_address_line}</div>
-              {profile.oauth_address_synced_at ? (
-                <div className="mt-1 text-xs text-zinc-500">
-                  Ažurirano: {new Date(profile.oauth_address_synced_at).toLocaleString("sr-RS")}
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <div className="mt-4 border-t border-zinc-200 pt-3 text-xs text-zinc-500">
-              Google trenutno nije poslao formatiranu adresu u metapodacima — često JWT sadrži samo ime
-              i email. Ako kasnije uključite dodatne scope-ove ili People API, ovo polje će se
-              popuniti pri sledećoj prijavi.
-            </div>
-          )}
+          </div>
+
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link
+              href="/dashboard/moje-zgrade"
+              className="rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
+            >
+              Moje zgrade →
+            </Link>
+            <Link
+              href="/dashboard/moje-zgrade/nova"
+              className="rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-700"
+            >
+              + Dodaj zgradu
+            </Link>
+          </div>
         </div>
+
       </main>
     </div>
   );
 }
-
