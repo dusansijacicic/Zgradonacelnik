@@ -8,8 +8,8 @@ type MapboxFeature = {
   place_name: string;
   text: string;
   address?: string;
-  center: [number, number]; // [lng, lat]
-  context?: { id: string; text: string; short_code?: string }[];
+  center: [number, number];
+  context?: { id: string; text: string }[];
 };
 
 type ParsedAddress = {
@@ -25,10 +25,11 @@ type ParsedAddress = {
   lng: number;
 };
 
+type ExistingBuilding = { id: string; member_count?: number } | null;
+
 function parseFeature(f: MapboxFeature): ParsedAddress {
   const ctx = f.context ?? [];
   const get = (prefix: string) => ctx.find((c) => c.id.startsWith(prefix))?.text ?? "";
-
   return {
     mapbox_id: f.id,
     place_name: f.place_name,
@@ -48,6 +49,8 @@ export default function NewBuildingClient({ mapboxToken }: { mapboxToken: string
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<MapboxFeature[]>([]);
   const [selected, setSelected] = useState<ParsedAddress | null>(null);
+  const [existingBuilding, setExistingBuilding] = useState<ExistingBuilding>(undefined as any);
+  const [checkingDb, setCheckingDb] = useState(false);
   const [entrance, setEntrance] = useState("");
   const [busy, setBusy] = useState(false);
   const [fetchingGeo, setFetchingGeo] = useState(false);
@@ -56,7 +59,6 @@ export default function NewBuildingClient({ mapboxToken }: { mapboxToken: string
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
@@ -70,6 +72,7 @@ export default function NewBuildingClient({ mapboxToken }: { mapboxToken: string
   function onQueryChange(val: string) {
     setQuery(val);
     setSelected(null);
+    setExistingBuilding(undefined as any);
     setMsg(null);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!val.trim() || val.length < 4) {
@@ -101,12 +104,31 @@ export default function NewBuildingClient({ mapboxToken }: { mapboxToken: string
     }, 300);
   }
 
-  function pickSuggestion(f: MapboxFeature) {
+  async function pickSuggestion(f: MapboxFeature) {
     const parsed = parseFeature(f);
     setSelected(parsed);
     setQuery(parsed.place_name);
     setSuggestions([]);
     setOpen(false);
+    setExistingBuilding(undefined as any);
+
+    // Check if this address already exists in our DB
+    setCheckingDb(true);
+    try {
+      const res = await fetch(
+        `/api/buildings/find?mapbox_id=${encodeURIComponent(f.id)}`,
+      );
+      if (res.ok) {
+        const json = (await res.json()) as { building?: ExistingBuilding };
+        setExistingBuilding(json.building ?? null);
+      } else {
+        setExistingBuilding(null);
+      }
+    } catch {
+      setExistingBuilding(null);
+    } finally {
+      setCheckingDb(false);
+    }
   }
 
   async function save() {
@@ -132,18 +154,16 @@ export default function NewBuildingClient({ mapboxToken }: { mapboxToken: string
       });
       const json = (await res.json()) as { id?: string; duplicate?: boolean; error?: string };
       if (!res.ok) throw new Error(json.error ?? "Greška");
-      setMsg({
-        text: json.duplicate
-          ? "Zgrada već postoji — dodat si kao član."
-          : "Zgrada kreirana i dodat si kao član.",
-        ok: true,
-      });
-      setTimeout(() => router.push(`/zgrade/${json.id}`), 1200);
+      setMsg({ text: "Uspešno! Preusmeravamo na stranicu zgrade...", ok: true });
+      setTimeout(() => router.push(`/zgrade/${json.id}`), 900);
     } catch (e: unknown) {
       setMsg({ text: e instanceof Error ? e.message : "Greška", ok: false });
       setBusy(false);
     }
   }
+
+  const isNew = selected && existingBuilding === null;
+  const isExisting = selected && existingBuilding && existingBuilding !== null;
 
   return (
     <div className="mt-6 space-y-4">
@@ -153,10 +173,10 @@ export default function NewBuildingClient({ mapboxToken }: { mapboxToken: string
         </div>
       )}
 
-      {/* Autocomplete input */}
+      {/* Search input */}
       <div ref={wrapperRef} className="relative">
         <label className="mb-1.5 block text-xs font-medium text-zinc-700">
-          Adresa objekta <span className="text-red-500">*</span>
+          Traži adresu svog objekta <span className="text-red-500">*</span>
         </label>
         <div className="relative">
           <input
@@ -168,24 +188,24 @@ export default function NewBuildingClient({ mapboxToken }: { mapboxToken: string
             className="h-11 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 pr-9 text-sm focus:border-zinc-400 focus:bg-white focus:outline-none"
             autoComplete="off"
           />
-          {fetchingGeo && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">
-              ⏳
+          {(fetchingGeo || checkingDb) && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 animate-pulse">
+              •••
             </div>
           )}
         </div>
 
         {open && suggestions.length > 0 && (
-          <ul className="absolute z-50 mt-1 w-full rounded-xl border border-zinc-200 bg-white shadow-lg overflow-hidden">
+          <ul className="absolute z-50 mt-1 w-full overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg">
             {suggestions.map((f) => (
               <li key={f.id}>
                 <button
                   type="button"
                   onMouseDown={() => pickSuggestion(f)}
-                  className="w-full px-4 py-3 text-left text-sm text-zinc-800 hover:bg-zinc-50 border-b border-zinc-100 last:border-0"
+                  className="w-full border-b border-zinc-100 px-4 py-3 text-left text-sm text-zinc-800 last:border-0 hover:bg-zinc-50"
                 >
                   <span className="font-medium">{f.text} {f.address}</span>
-                  <span className="ml-1 text-zinc-400 text-xs">
+                  <span className="ml-1.5 text-xs text-zinc-400">
                     {f.context?.find((c) => c.id.startsWith("place"))?.text ?? ""}
                   </span>
                 </button>
@@ -195,28 +215,45 @@ export default function NewBuildingClient({ mapboxToken }: { mapboxToken: string
         )}
       </div>
 
-      {/* Odabrana adresa — potvrda */}
-      {selected && (
+      {/* Status kartice */}
+      {selected && checkingDb && (
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500 animate-pulse">
+          Proveravamo da li zgrada postoji u sistemu...
+        </div>
+      )}
+
+      {isExisting && !checkingDb && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm">
-          <div className="font-medium text-emerald-900">Odabrana adresa</div>
-          <div className="mt-2 space-y-1 text-emerald-800">
-            <div><span className="text-xs text-emerald-600">Ulica:</span> {selected.street} {selected.street_number}</div>
-            <div><span className="text-xs text-emerald-600">Grad:</span> {selected.city}{selected.municipality ? ` (${selected.municipality})` : ""}</div>
-            {selected.postal_code && (
-              <div><span className="text-xs text-emerald-600">PTT:</span> {selected.postal_code}</div>
-            )}
-            <div className="text-xs text-emerald-600 font-mono">
-              {selected.lat.toFixed(5)}, {selected.lng.toFixed(5)}
-            </div>
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🏢</span>
+            <span className="font-semibold text-emerald-900">Zgrada postoji u sistemu</span>
+          </div>
+          <div className="mt-1 text-emerald-700">{selected.street} {selected.street_number}, {selected.city}</div>
+          <div className="mt-2 text-xs text-emerald-600">
+            Klikni "Pridruži se" i bićeš dodat kao član — admin će verifikovati tvoje stanovanje.
           </div>
         </div>
       )}
 
-      {/* Ulaz (opciono) */}
-      {selected && (
+      {isNew && !checkingDb && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">📍</span>
+            <span className="font-semibold text-blue-900">Nova adresa</span>
+          </div>
+          <div className="mt-1 text-blue-700">{selected.street} {selected.street_number}, {selected.city}</div>
+          <div className="mt-1 text-xs text-blue-600 font-mono">{selected.lat.toFixed(5)}, {selected.lng.toFixed(5)}</div>
+          <div className="mt-2 text-xs text-blue-600">
+            Ova zgrada još ne postoji na platformi. Bićeš prvi koji je registruje.
+          </div>
+        </div>
+      )}
+
+      {/* Ulaz */}
+      {selected && !checkingDb && (
         <div>
           <label className="mb-1.5 block text-xs font-medium text-zinc-700">
-            Ulaz / broj ulaza <span className="text-zinc-400">(opciono)</span>
+            Ulaz <span className="text-zinc-400">(opciono, ako zgrada ima više ulaza)</span>
           </label>
           <input
             type="text"
@@ -225,30 +262,27 @@ export default function NewBuildingClient({ mapboxToken }: { mapboxToken: string
             placeholder="npr. A, B, 1, 2..."
             className="h-11 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-sm focus:border-zinc-400 focus:bg-white focus:outline-none"
           />
-          <p className="mt-1 text-xs text-zinc-400">
-            Ako zgrada ima više ulaza, unesi oznaku svog ulaza.
-          </p>
         </div>
       )}
 
       {msg && (
         <div className={`rounded-xl border p-3 text-sm ${
-          msg.ok
-            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-            : "border-red-200 bg-red-50 text-red-700"
+          msg.ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-700"
         }`}>
           {msg.text}
         </div>
       )}
 
-      <button
-        type="button"
-        disabled={!selected || busy}
-        onClick={save}
-        className="h-11 w-full rounded-xl bg-zinc-900 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-40"
-      >
-        {busy ? "Čuvanje..." : "Dodaj ovu zgradu →"}
-      </button>
+      {selected && !checkingDb && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={save}
+          className="h-11 w-full rounded-xl bg-zinc-900 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-40"
+        >
+          {busy ? "Čuvanje..." : isExisting ? "Pridruži se ovoj zgradi →" : "Registruj zgradu i pridruži se →"}
+        </button>
+      )}
 
       {!selected && query.length >= 4 && !fetchingGeo && suggestions.length === 0 && (
         <p className="text-center text-xs text-zinc-400">
