@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { enforceRateLimit } from "@/lib/rateLimit";
+import { sendReviewNotification } from "@/lib/email";
 
 const bodySchema = z
   .object({
@@ -79,6 +80,42 @@ export async function POST(request: Request) {
   const { error } = await supabase.from("manager_reviews").insert(insertRow);
 
   if (error) return NextResponse.json({ error: "db_error", detail: error.message }, { status: 500 });
+
+  // Email notifikacija manageru (fire-and-forget)
+  if (body.data.manager_user_id) {
+    void (async () => {
+      try {
+        const [reviewerProf, managerAuth, building] = await Promise.all([
+          supabase.from("user_profiles").select("display_name, first_name, last_name").eq("user_id", user.id).maybeSingle(),
+          supabase.from("user_profiles").select("display_name").eq("user_id", body.data.manager_user_id!).maybeSingle(),
+          body.data.building_id
+            ? supabase.from("buildings").select("street, street_number, city").eq("id", body.data.building_id).maybeSingle()
+            : Promise.resolve({ data: null }),
+        ]);
+        const managerEmail = (await supabase.auth.admin?.getUserById?.(body.data.manager_user_id!))?.data?.user?.email;
+        // Fallback: use admin client to get email
+        const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
+        const adminSb = createSupabaseAdminClient();
+        const { data: managerUser } = await adminSb.auth.admin.getUserById(body.data.manager_user_id!);
+        if (managerUser?.user?.email) {
+          const reviewerName = body.data.is_anonymous_publicly
+            ? "Anonimni korisnik"
+            : (reviewerProf.data?.display_name || [reviewerProf.data?.first_name, reviewerProf.data?.last_name].filter(Boolean).join(" ") || "Korisnik");
+          const buildingAddr = building.data
+            ? `${building.data.street} ${building.data.street_number}, ${building.data.city}`
+            : "";
+          await sendReviewNotification({
+            managerEmail: managerUser.user.email,
+            managerName: managerAuth.data?.display_name ?? "Upravnik",
+            reviewerName,
+            ratingOverall: body.data.rating_overall,
+            buildingAddress: buildingAddr,
+            reviewUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/manager/recenzije`,
+          });
+        }
+      } catch { /* ne blokiramo odgovor zbog email greške */ }
+    })();
+  }
 
   await supabase.from("audit_log").insert({
     actor_user_id: user.id,

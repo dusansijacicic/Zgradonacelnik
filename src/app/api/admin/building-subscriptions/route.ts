@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { sendPremiumActivatedNotification } from "@/lib/email";
 
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient();
@@ -32,10 +33,17 @@ export async function POST(request: NextRequest) {
     const periodEnd = new Date(now);
     periodEnd.setMonth(periodEnd.getMonth() + months);
 
+    // Get existing subscription to find who subscribed
+    const { data: existingSub } = await admin
+      .from("building_subscriptions")
+      .select("subscribed_by")
+      .eq("building_id", building_id)
+      .maybeSingle();
+
     const { error } = await admin.from("building_subscriptions").upsert(
       {
         building_id,
-        subscribed_by: user.id,
+        subscribed_by: existingSub?.subscribed_by ?? user.id,
         status: "active",
         activated_by: user.id,
         current_period_start: now.toISOString(),
@@ -45,6 +53,31 @@ export async function POST(request: NextRequest) {
     );
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // Email notifikacija manageru (fire-and-forget)
+    if (existingSub?.subscribed_by) {
+      void (async () => {
+        try {
+          const [managerUser, buildingData] = await Promise.all([
+            admin.auth.admin.getUserById(existingSub.subscribed_by),
+            supabase.from("buildings").select("street, street_number, city").eq("id", building_id).maybeSingle(),
+          ]);
+          const managerEmail = managerUser.data?.user?.email;
+          if (!managerEmail) return;
+          const addr = buildingData.data
+            ? `${buildingData.data.street} ${buildingData.data.street_number}, ${buildingData.data.city}`
+            : building_id;
+          await sendPremiumActivatedNotification({
+            managerEmail,
+            managerName: managerUser.data.user?.user_metadata?.full_name ?? "Upravnik",
+            buildingAddress: addr,
+            periodEnd: periodEnd.toLocaleDateString("sr-RS"),
+            buildingUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/zgrade/${building_id}`,
+          });
+        } catch { /* ne blokiramo */ }
+      })();
+    }
+
     return NextResponse.json({ ok: true, period_end: periodEnd.toISOString() });
   }
 

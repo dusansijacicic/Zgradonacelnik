@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { sendPremiumRequestNotification } from "@/lib/email";
 import { nanoid } from "nanoid";
 
 export async function POST(request: NextRequest) {
@@ -10,7 +11,6 @@ export async function POST(request: NextRequest) {
   const { building_id } = (await request.json()) as { building_id?: string };
   if (!building_id) return NextResponse.json({ error: "building_id required" }, { status: 400 });
 
-  // Verify caller is active manager of this building
   const { data: assignment } = await supabase
     .from("building_manager_assignments")
     .select("id")
@@ -26,7 +26,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Check if subscription already exists
   const { data: existing } = await supabase
     .from("building_subscriptions")
     .select("id, status, payment_reference")
@@ -37,7 +36,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Zgrada već ima aktivan Premium." }, { status: 409 });
   }
 
-  // If already pending, return existing reference
   if (existing?.status === "pending_payment") {
     return NextResponse.json({ payment_reference: existing.payment_reference });
   }
@@ -55,9 +53,32 @@ export async function POST(request: NextRequest) {
     { onConflict: "building_id" },
   );
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Email notifikacija adminu (fire-and-forget)
+  void (async () => {
+    try {
+      const adminEmail = process.env.ADMIN_EMAIL;
+      if (!adminEmail) return;
+      const [buildingData, profileData] = await Promise.all([
+        supabase.from("buildings").select("street, street_number, city").eq("id", building_id).maybeSingle(),
+        supabase.from("user_profiles").select("display_name, first_name, last_name").eq("user_id", user.id).maybeSingle(),
+      ]);
+      const addr = buildingData.data
+        ? `${buildingData.data.street} ${buildingData.data.street_number}, ${buildingData.data.city}`
+        : building_id;
+      const managerName = profileData.data?.display_name
+        || [profileData.data?.first_name, profileData.data?.last_name].filter(Boolean).join(" ")
+        || "Upravnik";
+      await sendPremiumRequestNotification({
+        adminEmail,
+        buildingAddress: addr,
+        managerName,
+        paymentReference,
+        adminUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/admin/pretplate`,
+      });
+    } catch { /* ne blokiramo */ }
+  })();
 
   return NextResponse.json({ payment_reference: paymentReference });
 }

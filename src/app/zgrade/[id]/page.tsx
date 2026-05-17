@@ -78,7 +78,7 @@ export default async function BuildingPage({
             </span>
           </div>
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-4">
+          <div className="mt-6 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
             <Link
               href={`/zgrade/${id}/oglasna-tabla`}
               className="rounded-xl border border-zinc-200 bg-white p-4 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
@@ -89,7 +89,17 @@ export default async function BuildingPage({
               href={`/zgrade/${id}/predlozi`}
               className="rounded-xl border border-zinc-200 bg-white p-4 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
             >
-              Predlozi radova →
+              Predlozi →
+            </Link>
+            <Link
+              href={`/zgrade/${id}/zapisnici`}
+              className={`rounded-xl border p-4 text-sm font-medium hover:bg-zinc-50 ${
+                premium
+                  ? "border-amber-200 bg-amber-50 text-amber-900"
+                  : "border-zinc-200 bg-white text-zinc-500"
+              }`}
+            >
+              Zapisnici {premium ? "→" : "(Premium) →"}
             </Link>
             <Link
               href={`/zgrade/${id}/finansije`}
@@ -106,6 +116,12 @@ export default async function BuildingPage({
               className="rounded-xl border border-zinc-200 bg-white p-4 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
             >
               Dokumenta →
+            </Link>
+            <Link
+              href={`/zgrade/${id}/pretplata`}
+              className="rounded-xl border border-zinc-200 bg-white p-4 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+            >
+              Pretplata →
             </Link>
           </div>
 
