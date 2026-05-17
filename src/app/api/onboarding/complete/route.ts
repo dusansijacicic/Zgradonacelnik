@@ -5,7 +5,7 @@ import { z } from "zod";
 const schema = z.object({
   first_name: z.string().min(1).max(80),
   last_name: z.string().min(1).max(80),
-  user_type: z.enum(["resident", "professional_manager", "other"]),
+  user_type: z.enum(["resident", "other"]),
   municipality: z.string().max(100).optional(),
   city: z.string().max(100).optional(),
 });

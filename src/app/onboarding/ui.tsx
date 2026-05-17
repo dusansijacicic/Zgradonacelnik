@@ -3,18 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-type UserType = "resident" | "professional_manager" | "other";
+type UserType = "resident" | "other";
 
 const USER_TYPE_OPTIONS: { value: UserType; label: string; description: string }[] = [
   {
     value: "resident",
     label: "Stanar / vlasnik stana",
     description: "Živim u stambenom objektu i pratim rad upravnika",
-  },
-  {
-    value: "professional_manager",
-    label: "Profesionalni upravnik",
-    description: "Upravljam stambenim zgradama — imam licencu PKS",
   },
   {
     value: "other",
@@ -44,7 +39,7 @@ export default function OnboardingClient({
   const [firstName, setFirstName] = useState(initialFirstName);
   const [lastName, setLastName] = useState(initialLastName);
   const [userType, setUserType] = useState<UserType>(
-    (initialUserType as UserType) ?? "resident",
+    initialUserType === "other" ? "other" : "resident",
   );
   const [municipality, setMunicipality] = useState(initialMunicipality);
   const [city, setCity] = useState(initialCity);

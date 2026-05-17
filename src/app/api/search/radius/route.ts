@@ -27,24 +27,37 @@ export async function GET(request: Request) {
   });
   if (error) return NextResponse.json({ error: "rpc_error" }, { status: 500 });
 
-  const ids = Array.from(new Set((rows ?? []).map((r: any) => r.manager_user_id)));
-  const { data: profiles } = ids.length
-    ? await supabase
-        .from("user_profiles")
-        .select("user_id, display_name, city, municipality, professional_manager_status")
-        .in("user_id", ids)
-    : { data: [] as any[] };
+  const managerIds = Array.from(new Set((rows ?? []).map((r: any) => r.manager_user_id as string)));
+  const buildingIds = Array.from(new Set((rows ?? []).map((r: any) => r.building_id as string)));
 
-  const byId = new Map<string, any>();
-  for (const p of profiles ?? []) byId.set(p.user_id, p);
+  const [{ data: profiles }, { data: buildings }] = await Promise.all([
+    managerIds.length
+      ? supabase
+          .from("user_profiles")
+          .select("user_id, display_name, city, municipality, professional_manager_status")
+          .in("user_id", managerIds)
+      : Promise.resolve({ data: [] as any[] }),
+    buildingIds.length
+      ? supabase
+          .from("buildings")
+          .select("id, latitude, longitude, street, street_number")
+          .in("id", buildingIds)
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
 
-  const out =
-    (rows ?? []).map((r: any) => ({
-      manager_user_id: r.manager_user_id,
-      building_id: r.building_id,
-      distance_meters: r.distance_meters,
-      profile: byId.get(r.manager_user_id) ?? null,
-    })) ?? [];
+  const profilesById = new Map<string, any>();
+  for (const p of profiles ?? []) profilesById.set(p.user_id, p);
+
+  const buildingsById = new Map<string, any>();
+  for (const b of buildings ?? []) buildingsById.set(b.id, b);
+
+  const out = (rows ?? []).map((r: any) => ({
+    manager_user_id: r.manager_user_id,
+    building_id: r.building_id,
+    distance_meters: r.distance_meters,
+    profile: profilesById.get(r.manager_user_id) ?? null,
+    building: buildingsById.get(r.building_id) ?? null,
+  }));
 
   return NextResponse.json({ results: out });
 }

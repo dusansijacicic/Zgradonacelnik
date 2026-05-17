@@ -1,13 +1,17 @@
 import Image from "next/image";
 import Link from "next/link";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-const nav = [
-  { href: "/", label: "Početna" },
-  { href: "/pretraga", label: "Pretraga" },
-  { href: "/login", label: "Prijava" },
-];
+export async function SiteHeader() {
+  let isLoggedIn = false;
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    isLoggedIn = !!user;
+  } catch {
+    isLoggedIn = false;
+  }
 
-export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-brand-sky/30 bg-surface/95 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-surface/90">
       <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:py-3 md:py-4">
@@ -26,15 +30,33 @@ export function SiteHeader() {
           />
         </Link>
         <nav className="flex flex-wrap items-center justify-center gap-1 sm:justify-end sm:gap-1.5">
-          {nav.map((item) => (
+          <Link
+            href="/"
+            className="rounded-lg px-2.5 py-2 text-sm font-medium text-brand-navy transition-colors hover:bg-brand-sky-muted hover:text-brand-navy-deep sm:px-3"
+          >
+            Početna
+          </Link>
+          <Link
+            href="/pretraga"
+            className="rounded-lg px-2.5 py-2 text-sm font-medium text-brand-navy transition-colors hover:bg-brand-sky-muted hover:text-brand-navy-deep sm:px-3"
+          >
+            Pretraga
+          </Link>
+          {isLoggedIn ? (
             <Link
-              key={item.href}
-              href={item.href}
+              href="/dashboard"
+              className="rounded-lg bg-brand-navy px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-navy-deep sm:px-4"
+            >
+              Dashboard
+            </Link>
+          ) : (
+            <Link
+              href="/login"
               className="rounded-lg px-2.5 py-2 text-sm font-medium text-brand-navy transition-colors hover:bg-brand-sky-muted hover:text-brand-navy-deep sm:px-3"
             >
-              {item.label}
+              Prijava
             </Link>
-          ))}
+          )}
         </nav>
       </div>
     </header>

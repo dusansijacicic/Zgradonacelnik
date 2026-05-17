@@ -49,13 +49,14 @@ export async function proxy(request: NextRequest) {
 
   // For non-onboarding protected routes, check if onboarding is done
   if (!isOnboarding) {
-    const { data: profile } = await supabase
+    const { data: profile, error: profileErr } = await supabase
       .from("user_profiles")
       .select("onboarding_completed")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (!profile?.onboarding_completed) {
+    // If DB error (e.g. column missing before migration), allow through rather than infinite loop
+    if (!profileErr && !profile?.onboarding_completed) {
       return NextResponse.redirect(new URL(ONBOARDING_PATH, request.url));
     }
   }

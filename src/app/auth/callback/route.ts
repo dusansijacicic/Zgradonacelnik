@@ -121,12 +121,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(errUrl);
   }
 
-  if (upErr) {
-    await supabase.auth.signOut();
-    const errUrl = new URL("/login", url.origin);
-    errUrl.searchParams.set("error", "profile_sync");
-    return NextResponse.redirect(errUrl);
-  }
-
+  // Any other upsert error: session is valid, just proceed (profile sync is best-effort)
   return response;
 }
