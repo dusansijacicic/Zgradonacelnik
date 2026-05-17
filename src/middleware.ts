@@ -2,13 +2,18 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 const PROTECTED_PREFIXES = ["/dashboard", "/manager", "/admin"];
+const ONBOARDING_PATH = "/onboarding";
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  const requiresAuth = PROTECTED_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
+  const isOnboarding = pathname === ONBOARDING_PATH;
+  const requiresAuth =
+    isOnboarding ||
+    PROTECTED_PREFIXES.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    );
+
   if (!requiresAuth) return NextResponse.next();
 
   let response = NextResponse.next({ request });
@@ -42,10 +47,22 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // For non-onboarding protected routes, check if onboarding is done
+  if (!isOnboarding) {
+    const { data: profile } = await supabase
+      .from("user_profiles")
+      .select("onboarding_completed")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!profile?.onboarding_completed) {
+      return NextResponse.redirect(new URL(ONBOARDING_PATH, request.url));
+    }
+  }
+
   return response;
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/manager/:path*", "/admin/:path*"],
+  matcher: ["/dashboard/:path*", "/manager/:path*", "/admin/:path*", "/onboarding"],
 };
-

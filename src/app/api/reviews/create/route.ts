@@ -29,7 +29,8 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  await enforceRateLimit({ action: "review_create", limit: 10, windowSeconds: 3600 });
+  await enforceRateLimit({ action: "review_create", limit: 5, windowSeconds: 3600 });
+  await enforceRateLimit({ action: "review_create_day", limit: 12, windowSeconds: 86_400 });
 
   const body = bodySchema.safeParse(await request.json().catch(() => null));
   if (!body.success)
@@ -39,6 +40,24 @@ export async function POST(request: Request) {
   const captcha = await verifyTurnstileToken({ token: body.data.captcha_token });
   if (!captcha.ok) {
     return NextResponse.json({ error: "captcha_failed" }, { status: 400 });
+  }
+
+  const { data: reviewerProfile } = await supabase
+    .from("user_profiles")
+    .select("google_phone_normalized")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const phoneOk = Boolean(reviewerProfile?.google_phone_normalized?.trim());
+  if (!phoneOk) {
+    return NextResponse.json(
+      {
+        error: "review_requires_google_phone",
+        detail:
+          "Recenzije su dozvoljene samo nakon prijave sa Google naloga koji deli broj telefona (People API). Ponovo se prijavi i prihvati pristup telefonu i adresi.",
+      },
+      { status: 403 },
+    );
   }
 
   const insertRow = {

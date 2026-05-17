@@ -38,8 +38,8 @@ export default function ReviewClient({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const json = (await res.json()) as any;
-      if (!res.ok) throw new Error(json?.error ?? "Greška");
+      const json = (await res.json()) as { error?: string; detail?: string };
+      if (!res.ok) throw new Error(json?.detail ?? json?.error ?? "Greška");
       setMsg("Recenzija poslata (status: pending).");
       setTitle("");
       setContent("");

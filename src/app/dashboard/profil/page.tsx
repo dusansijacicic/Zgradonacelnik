@@ -11,9 +11,18 @@ export default async function ProfilePage() {
 
   const { data: profile } = await supabase
     .from("user_profiles")
-    .select("oauth_address_line, oauth_address_synced_at, city, municipality")
+    .select(
+      "oauth_address_line, oauth_address_synced_at, city, municipality, google_phone_raw, google_phone_normalized, google_identity_synced_at, first_name, last_name",
+    )
     .eq("user_id", user.id)
     .maybeSingle();
+
+  const maskPhone = (raw: string | null | undefined) => {
+    if (!raw?.trim()) return null;
+    const d = raw.replace(/\D/g, "");
+    if (d.length < 4) return "•••";
+    return `••••${d.slice(-4)}`;
+  };
 
   return (
     <div className="flex flex-1 justify-center bg-zinc-50 px-4 py-10">
@@ -29,6 +38,30 @@ export default async function ProfilePage() {
           <div className="font-medium text-zinc-900">Nalog</div>
           <div className="mt-1 text-zinc-700 break-all">{user.id}</div>
           <div className="mt-1 text-zinc-700 break-all">{user.email}</div>
+          {profile?.first_name || profile?.last_name ? (
+            <div className="mt-3 text-zinc-800">
+              <span className="text-xs font-medium text-zinc-500">Ime (iz Google / profila)</span>
+              <div className="mt-0.5">
+                {[profile.first_name, profile.last_name].filter(Boolean).join(" ") || "—"}
+              </div>
+            </div>
+          ) : null}
+          {maskPhone(profile?.google_phone_raw) ? (
+            <div className="mt-3 border-t border-zinc-200 pt-3">
+              <div className="text-xs font-medium text-zinc-500">Telefon (Google, maskiran)</div>
+              <div className="mt-0.5 font-mono text-zinc-800">{maskPhone(profile?.google_phone_raw)}</div>
+              {profile?.google_identity_synced_at ? (
+                <div className="mt-1 text-xs text-zinc-500">
+                  Sinhronizacija: {new Date(profile.google_identity_synced_at).toLocaleString("sr-RS")}
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="mt-3 border-t border-zinc-200 pt-3 text-xs text-zinc-500">
+              Broj telefona još nije učitan iz Google naloga — potrebna je prijava sa dozvolama za telefon
+              (People API).
+            </div>
+          )}
           {profile?.oauth_address_line ? (
             <div className="mt-4 border-t border-zinc-200 pt-3">
               <div className="text-xs font-medium text-zinc-500">Adresa iz Google naloga (JWT)</div>
