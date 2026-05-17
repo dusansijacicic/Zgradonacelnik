@@ -42,7 +42,7 @@ export async function POST(request: Request) {
         role: "resident",
         verification_status: "unverified",
         verification_method: null,
-      }).throwOnError().catch(() => null); // ignore 23505 duplicate
+      }); // 23505 duplicate ignored intentionally
       return NextResponse.json({ id: existing.id, duplicate: true });
     }
   }
