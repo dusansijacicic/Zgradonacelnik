@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
         : buildingId;
       const userName = profileData.data?.display_name
         || [profileData.data?.first_name, profileData.data?.last_name].filter(Boolean).join(" ")
-        || user.email ?? "Korisnik";
+        || (user.email ?? "Korisnik");
       await sendMembershipRequestNotification({
         adminEmail,
         userName,
