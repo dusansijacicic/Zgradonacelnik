@@ -7,6 +7,10 @@ const ONBOARDING_PATH = "/onboarding";
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Forward current pathname so Server Components (e.g. SiteHeader) can read it via headers()
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", pathname);
+
   const isOnboarding = pathname === ONBOARDING_PATH;
   const requiresAuth =
     isOnboarding ||
@@ -14,9 +18,11 @@ export async function proxy(request: NextRequest) {
       (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
     );
 
-  if (!requiresAuth) return NextResponse.next();
+  if (!requiresAuth) {
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
 
-  let response = NextResponse.next({ request });
+  let response = NextResponse.next({ request: { headers: requestHeaders } });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -27,7 +33,7 @@ export async function proxy(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          response = NextResponse.next({ request });
+          response = NextResponse.next({ request: { headers: requestHeaders } });
           for (const { name, value, options } of cookiesToSet) {
             response.cookies.set(name, value, options);
           }
@@ -65,5 +71,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/manager/:path*", "/admin/:path*", "/onboarding"],
+  matcher: ["/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
 };

@@ -1,9 +1,47 @@
 import Image from "next/image";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { LogoutButton } from "./LogoutButton";
 
 export async function SiteHeader() {
+  const headersList = await headers();
+  const pathname = headersList.get("x-pathname") ?? "";
+
+  // Dark nav for landing page
+  if (pathname === "/") {
+    return (
+      <header className="sticky top-0 z-40 border-b border-white/5" style={{ background: "#0f2744" }}>
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
+          <Link href="/" className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-base">🏢</div>
+            <span className="font-bold text-white">
+              Zgradonačelnik<span className="text-sky-400">.rs</span>
+            </span>
+          </Link>
+          <nav className="hidden sm:flex items-center gap-0.5">
+            <a href="#kako-radi" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/10 hover:text-white transition-colors">
+              Kako radi
+            </a>
+            <a href="#cene" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/10 hover:text-white transition-colors">
+              Cene
+            </a>
+            <Link href="/pretraga" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/10 hover:text-white transition-colors">
+              Pretraga
+            </Link>
+          </nav>
+          <Link
+            href="/login"
+            className="rounded-xl px-4 py-2 text-sm font-bold shadow-sm transition-opacity hover:opacity-90"
+            style={{ background: "#38bdf8", color: "#0c2a4a" }}
+          >
+            Prijavi se
+          </Link>
+        </div>
+      </header>
+    );
+  }
+
   let isLoggedIn = false;
   try {
     const supabase = await createSupabaseServerClient();
