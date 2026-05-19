@@ -1,17 +1,16 @@
 @import "tailwindcss";
 
-/* Brend iz logotipa: navy plavo, zelena akcent, sky plavo, svetla pozadina */
 :root {
-  --background: #f2f8fb;
-  --foreground: #152c45;
+  --background: #f7f8fa;
+  --foreground: #0f1923;
   --surface: #ffffff;
-  --brand-navy: #152c45;
-  --brand-navy-deep: #0f1f33;
-  --brand-green: #1a9b52;
-  --brand-green-hover: #158347;
-  --brand-sky: #5eb3d4;
-  --brand-sky-muted: #e3f3fa;
-  --border-subtle: #c5dfe9;
+  --brand-navy: #0f2744;
+  --brand-navy-deep: #081a30;
+  --brand-green: #16a34a;
+  --brand-green-hover: #15803d;
+  --brand-sky: #38bdf8;
+  --brand-sky-muted: #f0f9ff;
+  --border-subtle: #e2e8f0;
 }
 
 @theme inline {
@@ -29,8 +28,31 @@
   --font-mono: var(--font-geist-mono);
 }
 
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Smooth transitions for interactive elements */
+a, button {
+  transition: all 0.15s ease;
+}
+
+/* Better scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Focus ring */
+:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+  border-radius: 6px;
 }

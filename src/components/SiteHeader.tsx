@@ -9,54 +9,41 @@ export async function SiteHeader() {
     const supabase = await createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
     isLoggedIn = !!user;
-  } catch {
-    isLoggedIn = false;
-  }
+  } catch { isLoggedIn = false; }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-brand-sky/30 bg-surface/95 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-surface/90">
-      <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:py-3 md:py-4">
-        <Link
-          href={isLoggedIn ? "/dashboard" : "/"}
-          className="flex min-w-0 justify-center sm:justify-start focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-green rounded-lg"
-        >
+    <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
+        <Link href={isLoggedIn ? "/dashboard" : "/"} className="flex items-center">
           <Image
             src="/zgradonacelnik_logo.jpeg"
             alt="Zgradonačelnik.rs"
-            width={720}
-            height={260}
-            sizes="(max-width: 640px) 92vw, (max-width: 1024px) 420px, 480px"
-            className="h-[3.35rem] w-auto max-w-full object-contain object-center sm:h-[4rem] sm:object-left md:h-[4.5rem] lg:h-[4.75rem]"
+            width={720} height={260}
+            sizes="(max-width: 640px) 200px, 280px"
+            className="h-10 w-auto sm:h-12"
             priority
           />
         </Link>
-        <nav className="flex flex-wrap items-center justify-center gap-1 sm:justify-end sm:gap-1.5">
-          <Link
-            href="/pretraga"
-            className="rounded-lg px-2.5 py-2 text-sm font-medium text-brand-navy transition-colors hover:bg-brand-sky-muted hover:text-brand-navy-deep sm:px-3"
-          >
+
+        <nav className="flex items-center gap-1">
+          <Link href="/pretraga" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
             Pretraga
           </Link>
           {isLoggedIn ? (
             <>
-              <Link
-                href="/dashboard/moje-zgrade"
-                className="rounded-lg px-2.5 py-2 text-sm font-medium text-brand-navy transition-colors hover:bg-brand-sky-muted hover:text-brand-navy-deep sm:px-3"
-              >
+              <Link href="/dashboard/moje-zgrade" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
                 Moje zgrade
               </Link>
-              <Link
-                href="/dashboard/profil"
-                className="rounded-lg px-2.5 py-2 text-sm font-medium text-brand-navy transition-colors hover:bg-brand-sky-muted hover:text-brand-navy-deep sm:px-3"
-              >
+              <Link href="/dashboard/profil" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
                 Profil
               </Link>
-              <LogoutButton className="rounded-lg px-2.5 py-2 text-sm font-medium text-brand-navy transition-colors hover:bg-brand-sky-muted hover:text-brand-navy-deep sm:px-3 disabled:opacity-50" />
+              <div className="ml-1 h-5 w-px bg-slate-200" />
+              <LogoutButton className="ml-1 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40" />
             </>
           ) : (
             <Link
               href="/login"
-              className="rounded-lg bg-brand-navy px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-navy-deep sm:px-4"
+              className="ml-2 rounded-xl bg-brand-navy px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-navy-deep"
             >
               Prijava
             </Link>
