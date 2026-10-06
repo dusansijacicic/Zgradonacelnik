@@ -3,103 +3,85 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+type Report = {
+  parsed: number;
+  upserted: number;
+  activeInFile: number;
+  deactivatedMissing: number;
+  managersExpired: number;
+  skippedDeactivation: boolean;
+};
+
 export default function RegistryImportClient() {
   const router = useRouter();
-  const [csv, setCsv] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [fullSync, setFullSync] = useState(true);
+  const [force, setForce] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
-  async function importCsv() {
+  async function run(useBundled: boolean) {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/admin/registry-import", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ csv }),
-      });
-      const json = (await res.json()) as { error?: string; inserted?: number };
-      if (!res.ok) throw new Error(json?.error ?? "Greška");
-      setMsg(`Import OK: ${json.inserted} redova.`);
-      router.refresh();
-    } catch (e: unknown) {
-      setMsg(e instanceof Error ? e.message : "Greška");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function importSolidus() {
-    setBusy(true);
-    setMsg(null);
-    try {
-      const res = await fetch("/api/admin/registry-import/solidus", { method: "POST" });
-      const json = (await res.json()) as {
-        error?: string;
-        detail?: string;
-        inserted?: number;
-        deleted_previous?: number;
-        parsed_rows?: number;
-        inserted_partial?: number;
-      };
-      if (!res.ok) {
-        const hint = json.detail ? ` (${json.detail})` : "";
-        throw new Error((json?.error ?? "Greška") + hint);
+      let res: Response;
+      if (useBundled) {
+        res = await fetch("/api/admin/registry-import", { method: "POST" });
+      } else {
+        if (!file) throw new Error("Izaberi CSV fajl.");
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("full_sync", fullSync ? "1" : "0");
+        if (force) fd.append("force", "1");
+        res = await fetch("/api/admin/registry-import", { method: "POST", body: fd });
       }
-      setMsg(
-        `Solidus: ubačeno ${json.inserted} redova (parsirano ${json.parsed_rows}). ` +
-          `Obrisano prethodnih sa istim izvorom: ${json.deleted_previous ?? 0}.`,
-      );
+      const json = (await res.json()) as Report & { error?: string; detail?: string };
+      if (!res.ok) throw new Error(json.detail ?? json.error ?? "Greška");
+      setMsg({
+        ok: true,
+        text: `Obrađeno ${json.parsed} redova (${json.activeInFile} aktivnih). Deaktivirano jer ih nema u fajlu: ${json.deactivatedMissing}. Nalozi koji su izgubili verifikaciju: ${json.managersExpired}.`,
+      });
       router.refresh();
     } catch (e: unknown) {
-      setMsg(e instanceof Error ? e.message : "Greška");
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Greška" });
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="mt-6 space-y-8">
-      <div>
-        <h2 className="text-sm font-semibold text-zinc-900">Uvoz iz projekta (solidus.csv)</h2>
-        <p className="mt-1 text-sm text-zinc-600">
-          Učitava <span className="font-mono text-xs">docs/solidus.csv</span> — svi redovi (uključujući
-          &quot;Obrisan iz registra&quot;). Pre uvoza briše postojeće zapise sa izvorom{" "}
-          <span className="font-mono text-xs">solidus.csv</span>. Potreban je{" "}
-          <span className="font-mono text-xs">SUPABASE_SERVICE_ROLE_KEY</span>.
-        </p>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={importSolidus}
-          className="mt-3 h-11 w-full rounded-xl bg-emerald-700 text-sm font-medium text-white disabled:opacity-60"
-        >
-          Uvezi sve iz solidus.csv
+    <div className="mt-6 space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+      <div className="text-sm font-semibold text-zinc-900">Novi izvoz registra</div>
+      <p className="text-xs text-zinc-600">
+        Excel: Datoteka → Sačuvaj kao → „CSV UTF-8“. Kolone: Ime, Prezime, Mesto, Licenca br., Telefon, Email, Status.
+      </p>
+      <input
+        type="file"
+        accept=".csv,text/csv"
+        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-900 file:px-3 file:py-2 file:text-white"
+      />
+      <label className="flex items-start gap-2 text-xs text-zinc-700">
+        <input type="checkbox" checked={fullSync} onChange={(e) => setFullSync(e.target.checked)} className="mt-0.5" />
+        Ovo je kompletan registar — deaktiviraj upravnike kojih nema u fajlu
+      </label>
+      <label className="flex items-start gap-2 text-xs text-zinc-700">
+        <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} className="mt-0.5" />
+        Potvrđujem veliku promenu (ako je broj aktivnih pao za više od 20%)
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <button disabled={busy || !file} onClick={() => run(false)} className="h-10 rounded-xl bg-zinc-900 px-4 text-sm font-semibold text-white disabled:opacity-50">
+          {busy ? "Sinhronizujem..." : "Sinhronizuj iz fajla"}
+        </button>
+        <button disabled={busy} onClick={() => run(true)} className="h-10 rounded-xl border border-zinc-300 bg-white px-4 text-sm text-zinc-800 disabled:opacity-50">
+          Iz docs/solidus.csv (repo)
         </button>
       </div>
-
-      <div>
-        <h2 className="text-sm font-semibold text-zinc-900">Ručni uvoz (nalepi CSV)</h2>
-        <textarea
-          className="mt-2 h-72 w-full rounded-xl border border-zinc-200 p-3 text-sm"
-          placeholder="Nalepi CSV ovde..."
-          value={csv}
-          onChange={(e) => setCsv(e.target.value)}
-        />
-        <button
-          type="button"
-          disabled={busy || csv.trim().length === 0}
-          onClick={importCsv}
-          className="mt-3 h-11 w-full rounded-xl bg-zinc-900 text-sm font-medium text-white disabled:opacity-60"
-        >
-          Importuj
-        </button>
-      </div>
-
       {msg ? (
-        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">{msg}</div>
+        <div className={`rounded-lg border p-3 text-sm ${msg.ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-700"}`}>
+          {msg.text}
+        </div>
       ) : null}
     </div>
   );
 }
-

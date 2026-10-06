@@ -1,106 +1,68 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import RegistryImportClient from "./ui";
 
-/** Broj podatkovnih redova u docs/solidus.csv (bez zaglavlja). */
-function countSolidusDataRows(): number | null {
-  try {
-    const raw = readFileSync(join(process.cwd(), "docs", "solidus.csv"), "utf8");
-    const lines = raw.split(/\r?\n/).filter((line) => line.trim().length > 0);
-    if (lines.length === 0) return null;
-    return Math.max(0, lines.length - 1);
-  } catch {
-    return null;
-  }
-}
-
 export default async function AdminRegistryImportPage() {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/admin/registar-upravnika");
-
-  const { data: profile } = await supabase
-    .from("user_profiles")
-    .select("is_admin")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const { data: profile } = await supabase.from("user_profiles").select("is_admin").eq("user_id", user.id).maybeSingle();
   if (!profile?.is_admin) redirect("/dashboard");
 
-  const expectedSolidusRows = countSolidusDataRows();
+  const head = { count: "exact" as const, head: true };
+  const [total, active, claimed, lastSync] = await Promise.all([
+    supabase.from("professional_manager_registry").select("id", head),
+    supabase.from("professional_manager_registry").select("id", head).eq("is_active", true),
+    supabase.from("user_profiles").select("user_id", head).not("registry_id", "is", null),
+    supabase
+      .from("audit_log")
+      .select("created_at, metadata")
+      .eq("action", "registry_sync")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
-  const { count: solidusInDb } = await supabase
-    .from("professional_manager_registry")
-    .select("*", { count: "exact", head: true })
-    .eq("source_url", "solidus.csv");
-
-  const { count: registryTotal } = await supabase
-    .from("professional_manager_registry")
-    .select("*", { count: "exact", head: true });
-
-  const inDb = solidusInDb ?? 0;
-  const total = registryTotal ?? 0;
-  const fileRows = expectedSolidusRows;
+  const stats = [
+    { label: "Ukupno u bazi", value: total.count ?? 0 },
+    { label: "Aktivni (Registrovan)", value: active.count ?? 0 },
+    { label: "Neaktivni / obrisani", value: (total.count ?? 0) - (active.count ?? 0) },
+    { label: "Preuzeli nalog", value: claimed.count ?? 0 },
+  ];
 
   return (
     <div className="flex flex-1 justify-center bg-zinc-50 px-4 py-10">
-      <main className="w-full max-w-3xl">
+      <main className="w-full max-w-3xl space-y-4">
+        <Link href="/admin" className="text-sm text-zinc-500 hover:text-zinc-800">← Admin</Link>
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <h1 className="text-xl font-semibold tracking-tight text-zinc-900">
-            Import registra profesionalnih upravnika (CSV)
-          </h1>
+          <h1 className="text-xl font-semibold tracking-tight text-zinc-900">Registar profesionalnih upravnika</h1>
           <p className="mt-2 text-sm text-zinc-600">
-            MVP: uvoz cele tabele iz <span className="font-mono text-xs">docs/solidus.csv</span> ili ručni
-            CSV. Za nalepljeni fajl kolone:{" "}
-            <span className="font-medium text-zinc-900">
-              full_name, first_name, last_name, license_number, email, phone, municipality
-            </span>
-            . Solidus koristi kolone: Ime, Prezime, Mesto, Licenca br., Telefon, Email, Status…
+            Sinhronizacija sa izvozom iz PKS registra. Redovi se nikad ne brišu: ključ je broj licence, izmene se
+            ažuriraju, a upravnici kojih više nema (ili su „Obrisan iz registra“) postaju neaktivni i gube status
+            verifikovanog upravnika. Recenzije i istorija ostaju.
           </p>
-
-          {fileRows !== null ? (
-            <div className="mt-4 rounded-xl border border-brand-sky/40 bg-brand-sky-muted/60 p-4 text-sm text-brand-navy">
-              <p>
-                <span className="font-semibold">U bazi</span> sa izvorom{" "}
-                <code className="rounded bg-white/80 px-1 text-xs">solidus.csv</code>:{" "}
-                <span className="font-semibold tabular-nums">{inDb}</span> redova.
-              </p>
-              <p className="mt-1">
-                <span className="font-semibold">U fajlu</span>{" "}
-                <code className="rounded bg-white/80 px-1 text-xs">docs/solidus.csv</code> (bez
-                zaglavlja): <span className="font-semibold tabular-nums">{fileRows}</span> redova.
-              </p>
-              {inDb === fileRows ? (
-                <p className="mt-2 font-medium text-brand-green">Broj u bazi odgovara fajlu.</p>
-              ) : inDb === 0 ? (
-                <p className="mt-2 text-amber-800">
-                  Još nema uvoza iz Solidusa (ili su svi obrisani). Klikni „Uvezi sve iz solidus.csv“.
-                </p>
-              ) : (
-                <p className="mt-2 text-amber-800">
-                  Broj u bazi ({inDb}) ne odgovara fajlu ({fileRows}). Ponovi uvoz ili proveri log na
-                  serveru.
-                </p>
-              )}
-              <p className="mt-2 text-brand-navy/85">
-                Ukupno u registru (svi izvori):{" "}
-                <span className="font-semibold tabular-nums">{total}</span>
-              </p>
-            </div>
-          ) : (
-            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              Na serveru nije pronađen <code className="text-xs">docs/solidus.csv</code> — uporedi
-              lokalno ili proveri deploy (fajl mora biti u repou).
-            </div>
-          )}
-
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {stats.map((s) => (
+              <div key={s.label} className="rounded-xl border border-zinc-200 p-3">
+                <div className="text-xs text-zinc-500">{s.label}</div>
+                <div className="mt-1 text-lg font-semibold tabular-nums text-zinc-900">{s.value}</div>
+              </div>
+            ))}
+          </div>
+          {lastSync.data ? (
+            <p className="mt-3 text-xs text-zinc-500">
+              Poslednja sinhronizacija: {new Date(lastSync.data.created_at).toLocaleString("sr-RS")}
+            </p>
+          ) : null}
           <RegistryImportClient />
+          <div className="mt-6 border-t border-zinc-100 pt-4 text-sm">
+            <Link href="/admin/pozivi-upravnicima" className="font-semibold text-brand-navy underline">
+              Pošalji pozive upravnicima iz registra →
+            </Link>
+          </div>
         </div>
       </main>
     </div>
   );
 }
-

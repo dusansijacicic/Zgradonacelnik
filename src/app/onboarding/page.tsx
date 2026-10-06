@@ -9,11 +9,10 @@ export default async function OnboardingPage() {
 
   const { data: profile } = await supabase
     .from("user_profiles")
-    .select("first_name, last_name, user_type, municipality, city, onboarding_completed")
+    .select("first_name, last_name, birth_year, user_type, onboarding_completed")
     .eq("user_id", user.id)
     .maybeSingle();
 
-  // Already onboarded — send to dashboard
   if (profile?.onboarding_completed) redirect("/dashboard");
 
   return (
@@ -21,9 +20,8 @@ export default async function OnboardingPage() {
       <OnboardingClient
         initialFirstName={profile?.first_name ?? ""}
         initialLastName={profile?.last_name ?? ""}
-        initialUserType={(profile?.user_type as string | null) ?? "resident"}
-        initialMunicipality={profile?.municipality ?? ""}
-        initialCity={profile?.city ?? ""}
+        initialBirthYear={profile?.birth_year ?? null}
+        isVerifiedManager={profile?.user_type === "professional_manager"}
         email={user.email ?? ""}
       />
     </div>

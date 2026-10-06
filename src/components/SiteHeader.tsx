@@ -43,10 +43,21 @@ export async function SiteHeader() {
   }
 
   let isLoggedIn = false;
+  let isManager = false;
+  let isAdmin = false;
   try {
     const supabase = await createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
     isLoggedIn = !!user;
+    if (user) {
+      const { data: p } = await supabase
+        .from("user_profiles")
+        .select("user_type, is_admin")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      isManager = p?.user_type === "professional_manager";
+      isAdmin = Boolean(p?.is_admin);
+    }
   } catch { isLoggedIn = false; }
 
   return (
@@ -72,6 +83,16 @@ export async function SiteHeader() {
               <Link href="/dashboard/moje-zgrade" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
                 Moje zgrade
               </Link>
+              {isManager ? (
+                <Link href="/manager" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                  Upravnik
+                </Link>
+              ) : null}
+              {isAdmin ? (
+                <Link href="/admin" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                  Admin
+                </Link>
+              ) : null}
               <Link href="/dashboard/profil" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
                 Profil
               </Link>

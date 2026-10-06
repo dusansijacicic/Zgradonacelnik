@@ -190,3 +190,39 @@ Nakon što dodate sve env varijable:
 
 **"Login loop (stalno vraća na login)"**
 → Proveri Supabase → Auth → URL Configuration da je Site URL tačan
+
+---
+
+## 11. NOVO (migracija 0010) — registracija, adrese, upravnici, pretplate
+
+### 11.1 Migracija
+Pokreni `supabase/migrations/0010_security_registration_managers.sql` u SQL editoru (posle 0001–0009).
+Zatvara sigurnosne rupe (korisnik je mogao sam sebi da postavi `is_admin`, verifikaciju upravnika,
+verifikovano članstvo, objavljenu recenziju, aktivan Premium…) i dodaje nove tabele/funkcije.
+Postojeći korisnici bez godišta/adrese biće vraćeni na onboarding (osim admina).
+
+### 11.2 Nove env varijable (Vercel + .env.local)
+`GOOGLE_MAPS_API_KEY`, `OTP_SECRET`, `CRON_SECRET`, `NEXT_PUBLIC_PAYMENT_RECIPIENT`, `NEXT_PUBLIC_PREMIUM_PRICE_RSD`.
+`NEXT_PUBLIC_PAYMENT_MODEL` se više ne koristi (uvek model 97 sa kontrolnim brojem).
+
+### 11.3 Google Places API (adrese)
+1. Google Cloud (isti projekat kao OAuth) → APIs & Services → Library → **Places API (New)** → Enable.
+2. Credentials → Create API key → Restrict key → API restrictions: samo *Places API (New)*.
+3. Billing mora biti uključen (Google daje mesečni besplatni kredit; plaća se samo Place Details po izboru adrese).
+4. Ključ upiši u `GOOGLE_MAPS_API_KEY` (NE kao NEXT_PUBLIC — ključ ne ide u browser).
+
+### 11.4 Prijava emailom (magic link)
+1. Supabase → Authentication → Providers → Email: uključi, "Confirm email" uključeno.
+2. Supabase → Authentication → URL Configuration → Redirect URLs: dodaj `https://TVOJ-DOMEN/auth/callback` i `https://TVOJ-DOMEN/auth/confirm`.
+3. **Obavezno custom SMTP** (Supabase → Auth → SMTP): podaci iz Resend-a (smtp.resend.com, port 465, user `resend`, password = API key).
+   Bez toga Supabase šalje samo par mejlova na sat.
+4. Preporučeno (radi i kad korisnik otvori link na drugom uređaju): Auth → Email Templates → *Magic Link* i *Confirm signup*, link zameni sa:
+   `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next={{ .RedirectTo }}`
+
+### 11.5 Registar upravnika
+- Admin → Registar upravnika: otpremi novi CSV (Excel → Sačuvaj kao → CSV UTF-8). Redovi se nikad ne brišu;
+  "Obrisan iz registra" i nestali postaju neaktivni, a njihovi nalozi gube status verifikovanog upravnika.
+- Admin → Pozivi upravnicima: šalji u turama. Dok je `TEST_EMAIL` postavljen, sve ide na test adresu i upravnici se ne označavaju kao pozvani.
+
+### 11.6 Cron
+`vercel.json` pokreće `/api/cron/subscriptions` svaki dan u 06:00 UTC. Postavi `CRON_SECRET` na Vercelu (Vercel ga sam šalje u headeru).

@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/manager", "/admin"];
+// /zgrade/[id] i podstranice: samo prijavljeni korisnici koji su završili onboarding.
+const PROTECTED_PREFIXES = ["/dashboard", "/manager", "/admin", "/zgrade/"];
 const ONBOARDING_PATH = "/onboarding";
 
 export async function proxy(request: NextRequest) {
@@ -14,8 +15,8 @@ export async function proxy(request: NextRequest) {
   const isOnboarding = pathname === ONBOARDING_PATH;
   const requiresAuth =
     isOnboarding ||
-    PROTECTED_PREFIXES.some(
-      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    PROTECTED_PREFIXES.some((prefix) =>
+      prefix.endsWith("/") ? pathname.startsWith(prefix) : pathname === prefix || pathname.startsWith(`${prefix}/`),
     );
 
   if (!requiresAuth) {

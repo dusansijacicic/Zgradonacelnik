@@ -1,95 +1,94 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { NextResponse, after } from "next/server";
+import { z } from "zod";
+import { formatAddress, getSessionUser, isAdmin, jsonError, siteUrl } from "@/lib/api";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { sendPremiumActivatedNotification } from "@/lib/email";
 
-export async function POST(request: NextRequest) {
-  const supabase = await createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+const bodySchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("activate_order"), order_id: z.string().uuid() }),
+  z.object({ action: z.literal("cancel_order"), order_id: z.string().uuid() }),
+  z.object({ action: z.literal("deactivate"), building_id: z.string().uuid() }),
+]);
 
-  const { data: profile } = await supabase
-    .from("user_profiles")
-    .select("is_admin")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (!profile?.is_admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+export async function POST(request: Request) {
+  const { supabase, user } = await getSessionUser();
+  if (!user) return jsonError("unauthorized", 401);
+  if (!(await isAdmin(supabase, user.id))) return jsonError("forbidden", 403);
 
-  const body = (await request.json()) as {
-    building_id: string;
-    action: "activate" | "deactivate" | "cancel";
-    months?: number;
-  };
-
-  const { building_id, action, months = 1 } = body;
-  if (!building_id || !action) {
-    return NextResponse.json({ error: "building_id and action required" }, { status: 400 });
-  }
+  const body = bodySchema.safeParse(await request.json().catch(() => null));
+  if (!body.success) return jsonError("bad_request", 400);
 
   const admin = createSupabaseAdminClient();
-  const now = new Date();
+  const data = body.data;
 
-  if (action === "activate") {
-    const periodEnd = new Date(now);
-    periodEnd.setMonth(periodEnd.getMonth() + months);
+  if (data.action === "activate_order") {
+    const { error } = await admin.rpc("activate_subscription_order", { p_order_id: data.order_id, p_admin: user.id });
+    if (error) return jsonError("activate_failed", 400, error.message);
 
-    // Get existing subscription to find who subscribed
-    const { data: existingSub } = await admin
-      .from("building_subscriptions")
-      .select("subscribed_by")
-      .eq("building_id", building_id)
-      .maybeSingle();
+    await supabase.from("audit_log").insert({
+      actor_user_id: user.id,
+      action: "subscription_order_activate",
+      entity_type: "subscription_orders",
+      entity_id: data.order_id,
+    });
 
-    const { error } = await admin.from("building_subscriptions").upsert(
-      {
-        building_id,
-        subscribed_by: existingSub?.subscribed_by ?? user.id,
-        status: "active",
-        activated_by: user.id,
-        current_period_start: now.toISOString(),
-        current_period_end: periodEnd.toISOString(),
-      },
-      { onConflict: "building_id" },
-    );
+    after(async () => {
+      const { data: order } = await admin
+        .from("subscription_orders")
+        .select("ordered_by, building_ids")
+        .eq("id", data.order_id)
+        .maybeSingle();
+      if (!order) return;
+      const [{ data: u }, { data: subs }, { data: buildings }] = await Promise.all([
+        admin.auth.admin.getUserById(order.ordered_by),
+        admin.from("building_subscriptions").select("building_id, current_period_end").in("building_id", order.building_ids),
+        admin.from("buildings").select("id, street, street_number, entrance, city").in("id", order.building_ids),
+      ]);
+      const email = u?.user?.email;
+      if (!email) return;
+      const until = (subs ?? [])
+        .map((s) => s.current_period_end)
+        .filter(Boolean)
+        .sort()[0];
+      await sendPremiumActivatedNotification({
+        managerEmail: email,
+        managerName: (u.user?.user_metadata?.full_name as string | undefined) ?? "Upravniče",
+        buildingAddress: (buildings ?? []).map((b) => formatAddress(b)).join("; "),
+        periodEnd: until ? new Date(until).toLocaleDateString("sr-RS") : "—",
+        buildingUrl: `${siteUrl()}/manager/pretplata`,
+      }).catch((e) => console.error("[activation email]", e));
+    });
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-    // Email notifikacija manageru (fire-and-forget)
-    if (existingSub?.subscribed_by) {
-      void (async () => {
-        try {
-          const [managerUser, buildingData] = await Promise.all([
-            admin.auth.admin.getUserById(existingSub.subscribed_by),
-            supabase.from("buildings").select("street, street_number, city").eq("id", building_id).maybeSingle(),
-          ]);
-          const managerEmail = managerUser.data?.user?.email;
-          if (!managerEmail) return;
-          const addr = buildingData.data
-            ? `${buildingData.data.street} ${buildingData.data.street_number}, ${buildingData.data.city}`
-            : building_id;
-          await sendPremiumActivatedNotification({
-            managerEmail,
-            managerName: managerUser.data.user?.user_metadata?.full_name ?? "Upravnik",
-            buildingAddress: addr,
-            periodEnd: periodEnd.toLocaleDateString("sr-RS"),
-            buildingUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/zgrade/${building_id}`,
-          });
-        } catch { /* ne blokiramo */ }
-      })();
-    }
-
-    return NextResponse.json({ ok: true, period_end: periodEnd.toISOString() });
-  }
-
-  if (action === "deactivate" || action === "cancel") {
-    const { error } = await admin
-      .from("building_subscriptions")
-      .update({ status: action === "cancel" ? "cancelled" : "inactive" })
-      .eq("building_id", building_id);
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
 
-  return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+  if (data.action === "cancel_order") {
+    const { data: order } = await admin
+      .from("subscription_orders")
+      .select("id, status, building_ids, payment_reference")
+      .eq("id", data.order_id)
+      .maybeSingle();
+    if (!order || order.status !== "pending_payment") return jsonError("not_pending", 400);
+    await admin.from("subscription_orders").update({ status: "cancelled", activated_by: user.id }).eq("id", order.id);
+    await admin
+      .from("building_subscriptions")
+      .update({ status: "inactive" })
+      .in("building_id", order.building_ids)
+      .eq("status", "pending_payment")
+      .eq("payment_reference", order.payment_reference);
+    return NextResponse.json({ ok: true });
+  }
+
+  const { error } = await admin
+    .from("building_subscriptions")
+    .update({ status: "cancelled", activated_by: user.id })
+    .eq("building_id", data.building_id);
+  if (error) return jsonError("db_error", 500);
+  await supabase.from("audit_log").insert({
+    actor_user_id: user.id,
+    action: "subscription_deactivate",
+    entity_type: "buildings",
+    entity_id: data.building_id,
+  });
+  return NextResponse.json({ ok: true });
 }

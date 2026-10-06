@@ -1,106 +1,114 @@
 import { Resend } from "resend";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const siteUrl = () => (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
-/**
- * Baza za slanje emailova. Ako je TEST_EMAIL postavljen, svi mejlovi idu na tu adresu
- * umesto na pravog primaoca (korisno za testiranje bez spam-ovanja korisnika).
- */
-export async function sendEmail(params: {
-  to: string;
-  subject: string;
-  html: string;
-  replyTo?: string;
-}) {
+/** Escape korisničkog teksta u HTML mejlovima (imena, adrese, naslovi). */
+export function esc(v: unknown) {
+  return String(v ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+type EmailParams = { to: string; subject: string; html: string; replyTo?: string; headers?: Record<string, string> };
+
+function getClient() {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL;
   if (!apiKey || !from) {
     console.warn("[email] RESEND_API_KEY / RESEND_FROM_EMAIL nije postavljen — mejl preskočen.");
-    return;
+    return null;
   }
-
-  const testEmail = process.env.TEST_EMAIL;
-  const actualTo = testEmail ?? params.to;
-
-  const resend = new Resend(apiKey);
-  await resend.emails.send({
-    from,
-    to: actualTo,
-    subject: testEmail
-      ? `[TEST → ${params.to}] ${params.subject}`
-      : params.subject,
-    html: testEmail
-      ? `<p style="background:#fef3c7;border:1px solid #f59e0b;padding:8px 12px;border-radius:6px;font-size:12px;margin-bottom:16px;">
-           🧪 <strong>TEST MOD</strong> — originalno za: <code>${params.to}</code>
-         </p>${params.html}`
-      : params.html,
-    ...(params.replyTo ? { reply_to: params.replyTo } : {}),
-  });
+  return { resend: new Resend(apiKey), from };
 }
 
-// ─────────────────────────────────────────────────────────────
-// Specifični template-i za notifikacije
-// ─────────────────────────────────────────────────────────────
+/** TEST_EMAIL: svi mejlovi idu na tu adresu (testiranje bez slanja pravim korisnicima). */
+function applyTestMode(p: EmailParams): EmailParams {
+  const testEmail = process.env.TEST_EMAIL;
+  if (!testEmail) return p;
+  return {
+    ...p,
+    to: testEmail,
+    subject: `[TEST → ${p.to}] ${p.subject}`,
+    html: `<p style="background:#fef3c7;border:1px solid #f59e0b;padding:8px 12px;border-radius:6px;font-size:12px;margin-bottom:16px;">
+      🧪 <strong>TEST MOD</strong> — originalno za: <code>${esc(p.to)}</code></p>${p.html}`,
+  };
+}
+
+export async function sendEmail(params: EmailParams): Promise<boolean> {
+  const client = getClient();
+  if (!client) return false;
+  const p = applyTestMode(params);
+  const { error } = await client.resend.emails.send({
+    from: client.from,
+    to: p.to,
+    subject: p.subject,
+    html: p.html,
+    ...(p.replyTo ? { replyTo: p.replyTo } : {}),
+    ...(p.headers ? { headers: p.headers } : {}),
+  });
+  if (error) {
+    console.error("[email]", error.message);
+    return false;
+  }
+  return true;
+}
+
+/** Do 100 mejlova u jednom pozivu (Resend batch). Vraća broj uspešno predatih. */
+export async function sendEmailBatch(list: EmailParams[]): Promise<number> {
+  const client = getClient();
+  if (!client || !list.length) return 0;
+  let sent = 0;
+  for (let i = 0; i < list.length; i += 100) {
+    const chunk = list.slice(i, i + 100).map(applyTestMode);
+    const { error } = await client.resend.batch.send(
+      chunk.map((p) => ({
+        from: client.from,
+        to: p.to,
+        subject: p.subject,
+        html: p.html,
+        ...(p.replyTo ? { replyTo: p.replyTo } : {}),
+        ...(p.headers ? { headers: p.headers } : {}),
+      })),
+    );
+    if (error) {
+      console.error("[email batch]", error.message);
+      break;
+    }
+    sent += chunk.length;
+  }
+  return sent;
+}
+
+const layout = (inner: string) => `
+  <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#18181b;line-height:1.5">
+    ${inner}
+    <hr style="margin:32px 0;border:none;border-top:1px solid #e4e4e7"/>
+    <p style="font-size:12px;color:#a1a1aa">Zgradonačelnik.rs · <a href="${siteUrl()}/uslovi" style="color:#a1a1aa">Uslovi korišćenja</a></p>
+  </div>`;
+
+const button = (href: string, label: string) =>
+  `<a href="${href}" style="display:inline-block;background:#0f2744;color:#fff;padding:11px 22px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">${esc(label)}</a>`;
 
 export async function sendReviewNotification(params: {
   managerEmail: string;
-  managerName: string;
   reviewerName: string;
   ratingOverall: number;
   buildingAddress: string;
   reviewUrl: string;
 }) {
-  await sendEmail({
+  return sendEmail({
     to: params.managerEmail,
     subject: `Nova recenzija — ${params.ratingOverall}/5 ★`,
-    html: `
-      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#18181b">
-        <h2 style="font-size:20px;font-weight:600;margin-bottom:8px">Nova recenzija za Vas</h2>
-        <p style="color:#52525b;font-size:14px">
-          <strong>${params.reviewerName}</strong> je ostavio/la recenziju za zgradu
-          <strong>${params.buildingAddress}</strong>.
-        </p>
-        <div style="background:#f4f4f5;border-radius:10px;padding:16px;margin:20px 0;font-size:14px">
-          <div>Ocena: <strong>${params.ratingOverall}/5 ★</strong></div>
-        </div>
-        <a href="${params.reviewUrl}" style="display:inline-block;background:#18181b;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:500">
-          Pogledaj recenziju →
-        </a>
-        <hr style="margin:32px 0;border:none;border-top:1px solid #e4e4e7"/>
-        <p style="font-size:12px;color:#a1a1aa">
-          Zgradonačelnik.rs · <a href="${siteUrl}/uslovi" style="color:#a1a1aa">Uslovi korišćenja</a>
-        </p>
-      </div>
-    `,
-  });
-}
-
-export async function sendPremiumRequestNotification(params: {
-  adminEmail: string;
-  buildingAddress: string;
-  managerName: string;
-  paymentReference: string;
-  adminUrl: string;
-}) {
-  await sendEmail({
-    to: params.adminEmail,
-    subject: `Zahtev za Premium — ${params.buildingAddress}`,
-    html: `
-      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#18181b">
-        <h2 style="font-size:20px;font-weight:600;margin-bottom:8px">Novi zahtev za Premium pretplatu</h2>
-        <p style="color:#52525b;font-size:14px">
-          Upravnik <strong>${params.managerName}</strong> zatražio/la je Premium za zgradu
-          <strong>${params.buildingAddress}</strong>.
-        </p>
-        <div style="background:#f4f4f5;border-radius:10px;padding:16px;margin:20px 0;font-size:14px">
-          <div>Referentni broj: <strong style="font-family:monospace">${params.paymentReference}</strong></div>
-          <div style="margin-top:4px">Iznos: <strong>500 RSD</strong></div>
-        </div>
-        <a href="${params.adminUrl}" style="display:inline-block;background:#18181b;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:500">
-          Aktiviraj u Admin panelu →
-        </a>
-      </div>
-    `,
+    html: layout(`
+      <h2 style="font-size:20px">Nova recenzija za Vas</h2>
+      <p style="color:#52525b;font-size:14px"><strong>${esc(params.reviewerName)}</strong> je ostavio/la recenziju${
+        params.buildingAddress ? ` za zgradu <strong>${esc(params.buildingAddress)}</strong>` : ""
+      }. Recenzija se objavljuje posle moderacije; možete javno odgovoriti.</p>
+      <p>Ocena: <strong>${params.ratingOverall}/5 ★</strong></p>
+      ${button(params.reviewUrl, "Pogledaj i odgovori →")}`),
   });
 }
 
@@ -111,23 +119,14 @@ export async function sendPremiumActivatedNotification(params: {
   periodEnd: string;
   buildingUrl: string;
 }) {
-  await sendEmail({
+  return sendEmail({
     to: params.managerEmail,
-    subject: `Premium aktiviran — ${params.buildingAddress}`,
-    html: `
-      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#18181b">
-        <h2 style="font-size:20px;font-weight:600;margin-bottom:8px">★ Premium je aktiviran!</h2>
-        <p style="color:#52525b;font-size:14px">
-          Premium pretplata za zgradu <strong>${params.buildingAddress}</strong> je aktivirana.
-        </p>
-        <div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:10px;padding:16px;margin:20px 0;font-size:14px">
-          Aktivan do: <strong>${params.periodEnd}</strong>
-        </div>
-        <a href="${params.buildingUrl}" style="display:inline-block;background:#18181b;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:500">
-          Otvori zgradu →
-        </a>
-      </div>
-    `,
+    subject: "Premium je aktiviran ⭐",
+    html: layout(`
+      <h2 style="font-size:20px">Uplata je proknjižena — Premium je aktivan</h2>
+      <p style="color:#52525b;font-size:14px">Zgrade: <strong>${esc(params.buildingAddress)}</strong></p>
+      <p>Aktivno do: <strong>${esc(params.periodEnd)}</strong></p>
+      ${button(params.buildingUrl, "Otvori →")}`),
   });
 }
 
@@ -138,21 +137,12 @@ export async function sendMembershipRequestNotification(params: {
   role: string;
   adminUrl: string;
 }) {
-  await sendEmail({
+  return sendEmail({
     to: params.adminEmail,
-    subject: `Zahtev za članstvo — ${params.buildingAddress}`,
-    html: `
-      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#18181b">
-        <h2 style="font-size:20px;font-weight:600;margin-bottom:8px">Novi zahtev za članstvo u zgradi</h2>
-        <p style="color:#52525b;font-size:14px">
-          <strong>${params.userName}</strong> je zatražio/la pristup zgradi
-          <strong>${params.buildingAddress}</strong> kao <em>${params.role}</em>.
-        </p>
-        <a href="${params.adminUrl}" style="display:inline-block;background:#18181b;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:500">
-          Pregledaj u Admin panelu →
-        </a>
-      </div>
-    `,
+    subject: `Dokaz stanovanja — ${params.buildingAddress}`,
+    html: layout(`
+      <p><strong>${esc(params.userName)}</strong> je poslao/la dokaz za zgradu <strong>${esc(params.buildingAddress)}</strong> (${esc(params.role)}).</p>
+      ${button(params.adminUrl, "Pregledaj →")}`),
   });
 }
 
@@ -163,25 +153,43 @@ export async function sendNewMinutesNotification(params: {
   heldAt: string;
   minutesUrl: string;
 }) {
-  for (const email of params.residentEmails) {
-    await sendEmail({
-      to: email,
+  return sendEmailBatch(
+    params.residentEmails.map((to) => ({
+      to,
       subject: `Novi zapisnik — ${params.buildingAddress}`,
-      html: `
-        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#18181b">
-          <h2 style="font-size:20px;font-weight:600;margin-bottom:8px">Novi zapisnik sa sastanka</h2>
-          <p style="color:#52525b;font-size:14px">
-            Objavljen je novi zapisnik za zgradu <strong>${params.buildingAddress}</strong>.
-          </p>
-          <div style="background:#f4f4f5;border-radius:10px;padding:16px;margin:20px 0;font-size:14px">
-            <div><strong>${params.minutesTitle}</strong></div>
-            <div style="margin-top:4px;color:#71717a">Održan: ${params.heldAt}</div>
-          </div>
-          <a href="${params.minutesUrl}" style="display:inline-block;background:#18181b;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:500">
-            Pročitaj zapisnik →
-          </a>
-        </div>
-      `,
-    });
-  }
+      html: layout(`
+        <h2 style="font-size:20px">Novi zapisnik sa sastanka</h2>
+        <p>Zgrada <strong>${esc(params.buildingAddress)}</strong>: <strong>${esc(params.minutesTitle)}</strong> (održan ${esc(params.heldAt)}).</p>
+        ${button(params.minutesUrl, "Pročitaj zapisnik →")}`),
+    })),
+  );
+}
+
+export function managerInviteEmail(params: {
+  to: string;
+  fullName: string;
+  loginUrl: string;
+  profileUrl: string;
+  unsubscribeUrl: string;
+}): EmailParams {
+  return {
+    to: params.to,
+    subject: "Vaš profil upravnika na Zgradonačelnik.rs",
+    headers: { "List-Unsubscribe": `<${params.unsubscribeUrl}>` },
+    html: layout(`
+      <p>Poštovani/a ${esc(params.fullName)},</p>
+      <p>Zgradonačelnik.rs je platforma na kojoj stanari pronalaze upravnika svoje zgrade, prate finansije i ostavljaju
+      ocene. Vaš profil postoji na osnovu javnog <strong>registra profesionalnih upravnika PKS</strong>.</p>
+      <p>Besplatno možete da:</p>
+      <ul style="font-size:14px;color:#3f3f46">
+        <li>preuzmete svoj profil i odgovarate na recenzije,</li>
+        <li>dodate zgrade kojima upravljate,</li>
+        <li>pošaljete ponudu zgradama koje traže upravnika.</li>
+      </ul>
+      <p>Prijavite se <strong>ovom email adresom</strong> — potvrda da ste upravnik iz registra je automatska.</p>
+      <p>${button(params.loginUrl, "Preuzmi profil →")}</p>
+      <p style="font-size:13px;color:#71717a">Javni profil: <a href="${params.profileUrl}">${params.profileUrl}</a></p>
+      <p style="font-size:12px;color:#a1a1aa">Ovu poruku dobijate jer je Vaša adresa upisana u javni registar upravnika.
+      <a href="${params.unsubscribeUrl}" style="color:#a1a1aa">Ne želim više poruke</a>.</p>`),
+  };
 }

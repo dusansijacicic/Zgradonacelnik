@@ -33,7 +33,7 @@ export async function GET(request: Request) {
   const [{ data: profiles }, { data: buildings }] = await Promise.all([
     managerIds.length
       ? supabase
-          .from("user_profiles")
+          .from("manager_public_profiles")
           .select("user_id, display_name, city, municipality, professional_manager_status")
           .in("user_id", managerIds)
       : Promise.resolve({ data: [] as any[] }),

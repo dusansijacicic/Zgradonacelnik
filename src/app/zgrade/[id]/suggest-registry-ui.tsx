@@ -1,83 +1,86 @@
 "use client";
 
-import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
+type Row = { id: number; full_name: string; municipality: string | null; license_number: string | null };
+
+/** Stanar pretraži PKS registar po imenu i označi ko je upravnik zgrade. */
 export default function RegistryManagerSuggestClient({ buildingId }: { buildingId: string }) {
-  const [registryId, setRegistryId] = useState("");
+  const router = useRouter();
+  const [q, setQ] = useState("");
+  const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  async function submit() {
-    const n = Number.parseInt(registryId.trim(), 10);
-    if (!Number.isFinite(n) || n < 1) {
-      setMsg("Unesi validan ID iz registra (ceo broj).");
-      return;
-    }
+  function search(v: string) {
+    setQ(v);
+    if (debounce.current) clearTimeout(debounce.current);
+    if (v.trim().length < 3) return setRows([]);
+    debounce.current = setTimeout(async () => {
+      const res = await fetch(`/api/pretraga/registry?q=${encodeURIComponent(v.trim())}&pageSize=8`);
+      const json = (await res.json().catch(() => ({}))) as { rows?: Row[] };
+      setRows(json.rows ?? []);
+    }, 300);
+  }
+
+  async function pick(r: Row) {
+    if (!confirm(`Označiti ${r.full_name} kao upravnika ove zgrade?`)) return;
     setBusy(true);
     setMsg(null);
     try {
       const res = await fetch("/api/assignments/registry-suggest", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ building_id: buildingId, registry_id: n }),
+        body: JSON.stringify({ building_id: buildingId, registry_id: r.id }),
       });
       const json = (await res.json()) as { error?: string; detail?: string };
-      if (!res.ok) throw new Error(json?.detail ?? json?.error ?? "Greška");
-      setMsg(
-        "Predlog je poslat (pending). Admin treba da odobri. Posle toga možeš ostaviti recenziju vezanu za zgradu.",
-      );
-      setRegistryId("");
+      if (!res.ok) throw new Error(json.detail ?? json.error ?? "Greška");
+      setMsg({ text: "Hvala! Predlog čeka potvrdu administratora.", ok: true });
+      setRows([]);
+      setQ("");
+      router.refresh();
     } catch (e: unknown) {
-      setMsg(e instanceof Error ? e.message : "Greška");
+      setMsg({ text: e instanceof Error ? e.message : "Greška", ok: false });
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50/40 p-4">
-      <div className="text-sm font-medium text-zinc-900">Uvezi upravnika iz registra (bez naloga)</div>
-      <p className="mt-1 text-sm text-zinc-600">
-        Ako si <span className="font-medium">verifikovan</span> član ove zgrade, možeš predložiti red iz
-        državnog registra kao upravnika. ID pronađeš u pretrazi registra (
-        <Link href="/pretraga" className="font-medium text-emerald-900 underline-offset-2 hover:underline">
-          /pretraga
-        </Link>
-        , kolona ID ili link „Registar“).
+    <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/40 p-4">
+      <div className="text-sm font-medium text-slate-900">Znate ko vam je upravnik? Povežite ga.</div>
+      <p className="mt-1 text-xs text-slate-600">
+        Pretražite registar profesionalnih upravnika (PKS) po imenu i prezimenu ili broju licence.
       </p>
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <input
-          type="number"
-          min={1}
-          placeholder="ID u registru"
-          value={registryId}
-          onChange={(e) => setRegistryId(e.target.value)}
-          className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm sm:max-w-xs"
-        />
-        <button
-          type="button"
-          disabled={busy}
-          onClick={submit}
-          className="h-11 shrink-0 rounded-xl bg-emerald-800 px-4 text-sm font-medium text-white disabled:opacity-60"
-        >
-          Pošalji predlog
-        </button>
-      </div>
-      {registryId.trim() && Number.parseInt(registryId, 10) > 0 ? (
-        <p className="mt-2 text-xs text-zinc-600">
-          Recenzija vezana za ovu zgradu:{" "}
-          <Link
-            className="font-medium text-emerald-900 underline-offset-2 hover:underline"
-            href={`/registar/${Number.parseInt(registryId, 10)}/recenzija?building_id=${encodeURIComponent(buildingId)}`}
-          >
-            otvori formu →
-          </Link>
-        </p>
+      <input
+        value={q}
+        onChange={(e) => search(e.target.value)}
+        placeholder="npr. Petar Petrović"
+        className="mt-3 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+      />
+      {rows.length ? (
+        <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+          {rows.map((r) => (
+            <li key={r.id}>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => pick(r)}
+                className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50"
+              >
+                <span className="font-medium">{r.full_name}</span>
+                <span className="ml-2 text-xs text-slate-500">
+                  {r.municipality ?? ""}
+                  {r.license_number ? ` · lic. ${r.license_number}` : ""}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
       ) : null}
-      {msg ? (
-        <div className="mt-3 rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-700">{msg}</div>
-      ) : null}
+      {msg ? <div className={`mt-2 text-sm ${msg.ok ? "text-emerald-700" : "text-red-600"}`}>{msg.text}</div> : null}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export default async function RegistryManagerPublicPage({
@@ -15,11 +15,19 @@ export default async function RegistryManagerPublicPage({
 
   const { data: row } = await supabase
     .from("professional_manager_registry")
-    .select("id, full_name, municipality, license_number")
+    .select("id, full_name, municipality, license_number, is_active")
     .eq("id", id)
     .maybeSingle();
 
   if (!row) notFound();
+
+  // Upravnik je preuzeo profil → kanonski profil je nalog na platformi.
+  const { data: claimed } = await supabase
+    .from("manager_public_profiles")
+    .select("user_id")
+    .eq("registry_id", id)
+    .maybeSingle();
+  if (claimed?.user_id) redirect(`/upravnik/${claimed.user_id}`);
 
   const { data: reviews } = await supabase
     .from("manager_reviews")
@@ -72,6 +80,11 @@ export default async function RegistryManagerPublicPage({
                 {row.municipality ? ` • ${row.municipality}` : ""}
                 {row.license_number ? ` • Lic. ${row.license_number}` : ""}
               </p>
+              {!row.is_active ? (
+                <p className="mt-3 inline-block rounded-lg bg-red-50 px-2 py-1 text-xs font-semibold text-red-700">
+                  Obrisan iz registra PKS — licenca nije aktivna
+                </p>
+              ) : null}
               <p className="mt-3 text-xs text-zinc-500">
                 Ovaj upravnik možda još nema nalog na platformi. Recenzije su vezane za red u registru i
                 (opciono) za zgradu kada stanar uveže upravnika.

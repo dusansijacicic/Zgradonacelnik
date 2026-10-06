@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, after, type NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isBuildingPremium } from "@/lib/buildingPremium";
 import { sendNewMinutesNotification } from "@/lib/email";
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Notifikacija stanarima (fire-and-forget)
-  void (async () => {
+  after(async () => {
     try {
       const adminSb = createSupabaseAdminClient();
       const [buildingData, memberships] = await Promise.all([
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
         });
       }
     } catch { /* ne blokiramo */ }
-  })();
+  });
 
   return NextResponse.json({ ok: true, id: inserted.id });
 }

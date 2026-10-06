@@ -1,47 +1,66 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import TurnstileWidget from "@/components/TurnstileWidget";
 
-export default function VerificationClient() {
-  const [step, setStep] = useState<"request" | "verify">("request");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
+type Candidate = { id: number; full_name: string; municipality: string | null; license_number: string | null; claimed?: boolean };
 
+export default function VerificationClient({
+  defaultEmail,
+  ownEmailCandidates,
+}: {
+  defaultEmail: string;
+  ownEmailCandidates: Candidate[];
+}) {
+  const router = useRouter();
+  const [email, setEmail] = useState(ownEmailCandidates.length ? defaultEmail : "");
+  const [candidates, setCandidates] = useState<Candidate[]>(ownEmailCandidates.length > 1 ? ownEmailCandidates : []);
+  const [registryId, setRegistryId] = useState<number | null>(ownEmailCandidates.length === 1 ? ownEmailCandidates[0].id : null);
   const [requestId, setRequestId] = useState<string | null>(null);
   const [otp, setOtp] = useState("");
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
-  async function requestOtp() {
+  async function send() {
     setBusy(true);
     setMsg(null);
     try {
       const res = await fetch("/api/manager-verification/request", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          first_name: firstName,
-          last_name: lastName,
-          email,
-          captcha_token: captchaToken,
-        }),
+        body: JSON.stringify({ email, registry_id: registryId ?? undefined, captcha_token: captchaToken }),
       });
-      const json = (await res.json()) as any;
-      if (!res.ok) throw new Error(json?.error ?? "Greška");
-      setRequestId(json.id);
-      setStep("verify");
-      setMsg("OTP kod je poslat na email. Važi 15 minuta.");
-    } catch (e: any) {
-      setMsg(e?.message ?? "Greška");
+      const json = (await res.json()) as {
+        status?: string;
+        id?: string;
+        full_name?: string;
+        error?: string;
+        detail?: string;
+        candidates?: Candidate[];
+      };
+      if (res.status === 409 && json.candidates) {
+        setCandidates(json.candidates);
+        setMsg({ text: json.detail ?? "Izaberi koji upravnik si ti.", ok: false });
+        return;
+      }
+      if (!res.ok) throw new Error(json.detail ?? json.error ?? "Greška");
+      if (json.status === "verified") {
+        setMsg({ text: "Potvrđeno! Sada si verifikovan profesionalni upravnik.", ok: true });
+        router.refresh();
+        return;
+      }
+      setRequestId(json.id ?? null);
+      setMsg({ text: `Kod je poslat na ${email}. Važi 15 minuta.`, ok: true });
+    } catch (e: unknown) {
+      setMsg({ text: e instanceof Error ? e.message : "Greška", ok: false });
     } finally {
       setBusy(false);
     }
   }
 
-  async function verifyOtp() {
+  async function verify() {
     if (!requestId) return;
     setBusy(true);
     setMsg(null);
@@ -49,84 +68,103 @@ export default function VerificationClient() {
       const res = await fetch("/api/manager-verification/verify-otp", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          request_id: requestId,
-          otp,
-        }),
+        body: JSON.stringify({ request_id: requestId, otp }),
       });
-      const json = (await res.json()) as any;
-      if (!res.ok) throw new Error(json?.error ?? "Greška");
-      setMsg("Verifikacija uspešna. Osveži stranicu da vidiš status.");
-    } catch (e: any) {
-      setMsg(e?.message ?? "Greška");
+      const json = (await res.json()) as { error?: string; detail?: string };
+      if (!res.ok) throw new Error(json.detail ?? json.error ?? "Greška");
+      setMsg({ text: "Potvrđeno! Sada si verifikovan profesionalni upravnik.", ok: true });
+      router.refresh();
+    } catch (e: unknown) {
+      setMsg({ text: e instanceof Error ? e.message : "Greška", ok: false });
     } finally {
       setBusy(false);
     }
   }
 
-  return (
-    <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-4">
-      <div className="text-sm font-medium text-zinc-900">
-        Email verifikacija (MVP)
-      </div>
-      <p className="mt-1 text-sm text-zinc-600">
-        Unesi podatke iz registra i email koji postoji u registru. Dobićeš OTP kod
-        na taj email.
-      </p>
+  const inputCls = "h-11 w-full rounded-xl border border-zinc-200 px-3 text-sm";
 
-      {step === "request" ? (
-        <div className="mt-4 grid gap-3">
+  return (
+    <div className="mt-6 space-y-4">
+      {ownEmailCandidates.length > 0 && !requestId ? (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+          <div className="font-semibold">Tvoj email ({defaultEmail}) je u registru upravnika.</div>
+          <p className="mt-1 text-xs">Pošto si se prijavio tom adresom, potvrda ide jednim klikom — bez koda.</p>
+        </div>
+      ) : null}
+
+      {!requestId ? (
+        <div className="grid gap-3">
+          <label className="text-xs font-semibold text-zinc-600">Email iz registra upravnika</label>
           <input
-            className="h-11 rounded-xl border border-zinc-200 px-3 text-sm"
-            placeholder="Ime"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-          />
-          <input
-            className="h-11 rounded-xl border border-zinc-200 px-3 text-sm"
-            placeholder="Prezime"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-          />
-          <input
-            className="h-11 rounded-xl border border-zinc-200 px-3 text-sm"
-            placeholder="Email iz registra"
+            type="email"
+            className={inputCls}
+            placeholder="email@upisan-u-registar.rs"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setCandidates([]);
+              setRegistryId(null);
+            }}
           />
+
+          {candidates.length > 1 ? (
+            <div className="space-y-2">
+              {candidates.map((c) => (
+                <label
+                  key={c.id}
+                  className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm ${
+                    registryId === c.id ? "border-brand-navy bg-brand-navy/5" : "border-zinc-200"
+                  } ${c.claimed ? "opacity-50" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="registry"
+                    disabled={c.claimed}
+                    checked={registryId === c.id}
+                    onChange={() => setRegistryId(c.id)}
+                  />
+                  <span>
+                    <span className="font-medium">{c.full_name}</span>
+                    <span className="text-xs text-zinc-500">
+                      {c.license_number ? ` · lic. ${c.license_number}` : ""}
+                      {c.municipality ? ` · ${c.municipality}` : ""}
+                      {c.claimed ? " · već povezan" : ""}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          ) : null}
+
+          <TurnstileWidget onToken={setCaptchaToken} />
+
           <button
-            disabled={busy}
-            onClick={requestOtp}
+            disabled={busy || !email || (candidates.length > 1 && !registryId)}
+            onClick={send}
             className="h-11 rounded-xl bg-zinc-900 text-sm font-medium text-white disabled:opacity-60"
           >
-            Pošalji OTP
+            {busy ? "..." : ownEmailCandidates.length && email === defaultEmail ? "Potvrdi da sam upravnik" : "Pošalji kod na email"}
           </button>
-
-          <div className="pt-2">
-            <TurnstileWidget onToken={setCaptchaToken} />
-          </div>
         </div>
       ) : (
-        <div className="mt-4 grid gap-3">
+        <div className="grid gap-3">
           <input
-            className="h-11 rounded-xl border border-zinc-200 px-3 text-sm tracking-widest"
-            placeholder="OTP (6 cifara)"
+            className={`${inputCls} text-center text-lg tracking-[0.4em]`}
+            inputMode="numeric"
+            maxLength={6}
+            placeholder="______"
             value={otp}
-            onChange={(e) => setOtp(e.target.value)}
+            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
           />
-          <button
-            disabled={busy}
-            onClick={verifyOtp}
-            className="h-11 rounded-xl bg-zinc-900 text-sm font-medium text-white disabled:opacity-60"
-          >
-            Potvrdi OTP
+          <button disabled={busy || otp.length !== 6} onClick={verify} className="h-11 rounded-xl bg-zinc-900 text-sm font-medium text-white disabled:opacity-60">
+            Potvrdi kod
           </button>
           <button
             disabled={busy}
             onClick={() => {
-              setStep("request");
-              setOtp("");
               setRequestId(null);
+              setOtp("");
+              setMsg(null);
             }}
             className="h-11 rounded-xl border border-zinc-200 bg-white text-sm font-medium text-zinc-900 disabled:opacity-60"
           >
@@ -136,11 +174,14 @@ export default function VerificationClient() {
       )}
 
       {msg ? (
-        <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
-          {msg}
+        <div
+          className={`rounded-xl border p-3 text-sm ${
+            msg.ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          {msg.text}
         </div>
       ) : null}
     </div>
   );
 }
-

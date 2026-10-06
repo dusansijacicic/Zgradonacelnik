@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { enforceRateLimit } from "@/lib/rateLimit";
+import { formatAddress, getSessionUser, jsonError, rateLimit, siteUrl } from "@/lib/api";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { verifyTurnstileToken } from "@/lib/captcha";
 import { sendReviewNotification } from "@/lib/email";
 
 const bodySchema = z
@@ -14,122 +15,108 @@ const bodySchema = z
     rating_communication: z.number().int().min(1).max(5).optional(),
     rating_responsiveness: z.number().int().min(1).max(5).optional(),
     rating_price_quality: z.number().int().min(1).max(5).optional(),
-    title: z.string().max(120).optional(),
-    content: z.string().max(4000).optional(),
+    title: z.string().trim().max(120).optional(),
+    content: z.string().trim().max(4000).optional(),
     is_anonymous_publicly: z.boolean().optional(),
-    captcha_token: z.string().optional(),
+    captcha_token: z.string().optional().nullable(),
   })
-  .refine((d) => Boolean(d.manager_user_id) !== Boolean(d.registry_id), {
-    message: "exactly_one_target",
-  });
+  .refine((d) => Boolean(d.manager_user_id) !== Boolean(d.registry_id), { message: "exactly_one_target" });
 
 export async function POST(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const { supabase, user } = await getSessionUser();
+  if (!user) return jsonError("unauthorized", 401);
 
-  await enforceRateLimit({ action: "review_create", limit: 5, windowSeconds: 3600 });
-  await enforceRateLimit({ action: "review_create_day", limit: 12, windowSeconds: 86_400 });
+  const limited =
+    (await rateLimit(supabase, "review_create", 5, 3600)) ?? (await rateLimit(supabase, "review_create_day", 12, 86_400));
+  if (limited) return limited;
 
   const body = bodySchema.safeParse(await request.json().catch(() => null));
-  if (!body.success)
-    return NextResponse.json({ error: "bad_request" }, { status: 400 });
+  if (!body.success) return jsonError("bad_request", 400);
+  const d = body.data;
 
-  const { verifyTurnstileToken } = await import("@/lib/captcha");
-  const captcha = await verifyTurnstileToken({ token: body.data.captcha_token });
-  if (!captcha.ok) {
-    return NextResponse.json({ error: "captcha_failed" }, { status: 400 });
-  }
+  const captcha = await verifyTurnstileToken({ token: d.captcha_token });
+  if (!captcha.ok) return jsonError("captcha_failed", 400, "Potvrdi da nisi robot.");
 
-  const { data: reviewerProfile } = await supabase
-    .from("user_profiles")
-    .select("google_phone_normalized")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  const phoneOk = Boolean(reviewerProfile?.google_phone_normalized?.trim());
-  if (!phoneOk) {
-    return NextResponse.json(
-      {
-        error: "review_requires_google_phone",
-        detail:
-          "Recenzije su dozvoljene samo nakon prijave sa Google naloga koji deli broj telefona (People API). Ponovo se prijavi i prihvati pristup telefonu i adresi.",
-      },
-      { status: 403 },
+  // Anti-spam: Google nalog sa telefonom ILI potvrđeni stanar neke zgrade.
+  const [{ data: profile }, { count: verifiedMemberships }] = await Promise.all([
+    supabase.from("user_profiles").select("google_phone_normalized").eq("user_id", user.id).maybeSingle(),
+    supabase
+      .from("building_memberships")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("verification_status", "verified"),
+  ]);
+  if (!profile?.google_phone_normalized?.trim() && !verifiedMemberships) {
+    return jsonError(
+      "review_not_allowed",
+      403,
+      "Recenzije ostavljaju potvrđeni stanari. Pošalji dokaz stanovanja na stranici svoje zgrade (ili se prijavi Google nalogom koji ima broj telefona).",
     );
   }
 
-  const insertRow = {
-    manager_user_id: body.data.manager_user_id ?? null,
-    registry_id: body.data.registry_id ?? null,
-    building_id: body.data.building_id ?? null,
+  const admin = createSupabaseAdminClient();
+
+  // Ako je upravnik iz registra preuzeo nalog, recenzija ide na nalog.
+  let managerUserId = d.manager_user_id ?? null;
+  const registryId = d.registry_id ?? null;
+  if (registryId) {
+    const { data: owner } = await admin.from("user_profiles").select("user_id").eq("registry_id", registryId).maybeSingle();
+    if (owner?.user_id) managerUserId = owner.user_id;
+  }
+  if (managerUserId === user.id) return jsonError("self_review", 400, "Ne možeš oceniti sebe.");
+
+  const { error } = await supabase.from("manager_reviews").insert({
+    manager_user_id: managerUserId,
+    registry_id: managerUserId ? null : registryId,
+    building_id: d.building_id ?? null,
     reviewer_user_id: user.id,
-    rating_overall: body.data.rating_overall,
-    rating_transparency: body.data.rating_transparency ?? null,
-    rating_communication: body.data.rating_communication ?? null,
-    rating_responsiveness: body.data.rating_responsiveness ?? null,
-    rating_price_quality: body.data.rating_price_quality ?? null,
-    title: body.data.title ?? null,
-    content: body.data.content ?? null,
+    rating_overall: d.rating_overall,
+    rating_transparency: d.rating_transparency ?? null,
+    rating_communication: d.rating_communication ?? null,
+    rating_responsiveness: d.rating_responsiveness ?? null,
+    rating_price_quality: d.rating_price_quality ?? null,
+    title: d.title || null,
+    content: d.content || null,
     status: "pending",
-    is_anonymous_publicly: body.data.is_anonymous_publicly ?? false,
-  };
+    is_anonymous_publicly: d.is_anonymous_publicly ?? false,
+  });
 
-  const { error } = await supabase.from("manager_reviews").insert(insertRow);
-
-  if (error) return NextResponse.json({ error: "db_error", detail: error.message }, { status: 500 });
-
-  // Email notifikacija manageru (fire-and-forget)
-  if (body.data.manager_user_id) {
-    void (async () => {
-      try {
-        const [reviewerProf, managerAuth, building] = await Promise.all([
-          supabase.from("user_profiles").select("display_name, first_name, last_name").eq("user_id", user.id).maybeSingle(),
-          supabase.from("user_profiles").select("display_name").eq("user_id", body.data.manager_user_id!).maybeSingle(),
-          body.data.building_id
-            ? supabase.from("buildings").select("street, street_number, city").eq("id", body.data.building_id).maybeSingle()
-            : Promise.resolve({ data: null }),
-        ]);
-        const managerEmail = (await supabase.auth.admin?.getUserById?.(body.data.manager_user_id!))?.data?.user?.email;
-        // Fallback: use admin client to get email
-        const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
-        const adminSb = createSupabaseAdminClient();
-        const { data: managerUser } = await adminSb.auth.admin.getUserById(body.data.manager_user_id!);
-        if (managerUser?.user?.email) {
-          const reviewerName = body.data.is_anonymous_publicly
-            ? "Anonimni korisnik"
-            : (reviewerProf.data?.display_name || [reviewerProf.data?.first_name, reviewerProf.data?.last_name].filter(Boolean).join(" ") || "Korisnik");
-          const buildingAddr = building.data
-            ? `${building.data.street} ${building.data.street_number}, ${building.data.city}`
-            : "";
-          await sendReviewNotification({
-            managerEmail: managerUser.user.email,
-            managerName: managerAuth.data?.display_name ?? "Upravnik",
-            reviewerName,
-            ratingOverall: body.data.rating_overall,
-            buildingAddress: buildingAddr,
-            reviewUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/manager/recenzije`,
-          });
-        }
-      } catch { /* ne blokiramo odgovor zbog email greške */ }
-    })();
+  if (error) {
+    if (error.code === "23505") return jsonError("duplicate", 409, "Već si ocenio ovog upravnika za ovu zgradu.");
+    if (error.code === "42501") {
+      return jsonError("not_eligible", 403, "Za recenziju vezanu za zgradu moraš biti potvrđen stanar te zgrade.");
+    }
+    return jsonError("db_error", 500);
   }
 
   await supabase.from("audit_log").insert({
     actor_user_id: user.id,
     action: "review_create",
     entity_type: "manager_reviews",
-    entity_id:
-      body.data.manager_user_id ?? (body.data.registry_id != null ? `registry:${body.data.registry_id}` : ""),
-    metadata: {
-      manager_user_id: body.data.manager_user_id ?? null,
-      registry_id: body.data.registry_id ?? null,
-      building_id: body.data.building_id ?? null,
-    },
+    entity_id: managerUserId ?? `registry:${registryId}`,
+    metadata: { manager_user_id: managerUserId, registry_id: registryId, building_id: d.building_id ?? null },
   });
+
+  if (managerUserId) {
+    const target = managerUserId;
+    after(async () => {
+      const [{ data: u }, { data: reviewer }, { data: building }] = await Promise.all([
+        admin.auth.admin.getUserById(target),
+        admin.from("user_profiles").select("display_name").eq("user_id", user.id).maybeSingle(),
+        d.building_id
+          ? admin.from("buildings").select("street, street_number, entrance, city").eq("id", d.building_id).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
+      if (!u?.user?.email) return;
+      await sendReviewNotification({
+        managerEmail: u.user.email,
+        reviewerName: d.is_anonymous_publicly ? "Anonimni stanar" : reviewer?.display_name ?? "Stanar",
+        ratingOverall: d.rating_overall,
+        buildingAddress: formatAddress(building),
+        reviewUrl: `${siteUrl()}/manager/recenzije`,
+      }).catch(() => undefined);
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }
-

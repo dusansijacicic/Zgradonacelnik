@@ -1,94 +1,69 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { NextResponse, after } from "next/server";
+import { formatAddress, getSessionUser, jsonError, rateLimit, siteUrl } from "@/lib/api";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { sendMembershipRequestNotification } from "@/lib/email";
+import { storePrivateFile, validateUpload } from "@/lib/uploads";
 
-export async function POST(request: NextRequest) {
-  const supabase = await createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+/** Stanar šalje dokaz stanovanja (ugovor, vlasnički list, račun za struju/infostan). */
+export async function POST(request: Request) {
+  const { supabase, user } = await getSessionUser();
+  if (!user) return jsonError("unauthorized", 401);
+
+  const limited = await rateLimit(supabase, "membership_proof", 10, 3600);
+  if (limited) return limited;
 
   const formData = await request.formData();
-  const file = formData.get("file") as File | null;
-  const buildingId = formData.get("building_id") as string | null;
-  const note = formData.get("note") as string | null;
+  const buildingId = String(formData.get("building_id") ?? "");
+  const note = String(formData.get("note") ?? "").trim().slice(0, 500);
+  const upload = validateUpload(formData.get("file"), 10);
+  if (!upload.ok) return jsonError("bad_file", 400, upload.error);
 
-  if (!file || !buildingId) {
-    return NextResponse.json({ error: "file i building_id su obavezni" }, { status: 400 });
-  }
-
-  if (file.size > 10 * 1024 * 1024) {
-    return NextResponse.json({ error: "Fajl ne sme biti veći od 10MB" }, { status: 400 });
-  }
-
-  const allowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
-  if (!allowed.includes(file.type)) {
-    return NextResponse.json({ error: "Dozvoljeni formati: JPEG, PNG, WebP, PDF" }, { status: 400 });
-  }
-
-  // Check membership exists
   const { data: membership } = await supabase
     .from("building_memberships")
     .select("id, verification_status")
     .eq("building_id", buildingId)
     .eq("user_id", user.id)
+    .limit(1)
     .maybeSingle();
+  if (!membership) return jsonError("not_member", 403, "Nisi član ove zgrade.");
+  if (membership.verification_status === "verified") return jsonError("already_verified", 400, "Članstvo je već potvrđeno.");
 
-  if (!membership) {
-    return NextResponse.json({ error: "Niste član ove zgrade." }, { status: 403 });
+  let path: string;
+  try {
+    path = await storePrivateFile(`membership-proofs/${buildingId}/${user.id}`, upload.file, upload.ext);
+  } catch {
+    return jsonError("upload_failed", 500, "Upload nije uspeo.");
   }
 
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET ?? "zgradonacelnik-private";
-  const ext = file.name.split(".").pop() ?? "bin";
-  const path = `membership-proofs/${buildingId}/${user.id}-${Date.now()}.${ext}`;
-
-  const arrayBuffer = await file.arrayBuffer();
-  const { error: uploadError } = await supabase.storage
-    .from(bucket)
-    .upload(path, arrayBuffer, { contentType: file.type, upsert: true });
-
-  if (uploadError) {
-    return NextResponse.json({ error: uploadError.message }, { status: 500 });
-  }
-
-  const { error: updateError } = await supabase
+  // Status menja server (korisnik ne može sam sebi da menja verifikaciju).
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
     .from("building_memberships")
     .update({
       proof_document_path: path,
       proof_uploaded_at: new Date().toISOString(),
-      proof_note: note?.trim() || null,
+      proof_note: note || null,
       verification_status: "pending",
+      verification_method: "document",
     })
     .eq("id", membership.id);
+  if (error) return jsonError("db_error", 500);
 
-  if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
-  }
+  after(async () => {
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (!adminEmail) return;
+    const [{ data: building }, { data: profile }] = await Promise.all([
+      admin.from("buildings").select("street, street_number, entrance, city").eq("id", buildingId).maybeSingle(),
+      admin.from("user_profiles").select("display_name").eq("user_id", user.id).maybeSingle(),
+    ]);
+    await sendMembershipRequestNotification({
+      adminEmail,
+      userName: profile?.display_name ?? user.email ?? "Korisnik",
+      buildingAddress: formatAddress(building),
+      role: "stanar (dokaz priložen)",
+      adminUrl: `${siteUrl()}/admin/clanstva`,
+    }).catch(() => undefined);
+  });
 
-  // Notifikacija adminu (fire-and-forget)
-  void (async () => {
-    try {
-      const adminEmail = process.env.ADMIN_EMAIL;
-      if (!adminEmail) return;
-      const [buildingData, profileData] = await Promise.all([
-        supabase.from("buildings").select("street, street_number, city").eq("id", buildingId).maybeSingle(),
-        supabase.from("user_profiles").select("display_name, first_name, last_name").eq("user_id", user.id).maybeSingle(),
-      ]);
-      const addr = buildingData.data
-        ? `${buildingData.data.street} ${buildingData.data.street_number}, ${buildingData.data.city}`
-        : buildingId;
-      const userName = profileData.data?.display_name
-        || [profileData.data?.first_name, profileData.data?.last_name].filter(Boolean).join(" ")
-        || (user.email ?? "Korisnik");
-      await sendMembershipRequestNotification({
-        adminEmail,
-        userName,
-        buildingAddress: addr,
-        role: "stanar (dokaz priložen)",
-        adminUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/admin/zgrade-upravnici`,
-      });
-    } catch { /* ne blokiramo */ }
-  })();
-
-  return NextResponse.json({ ok: true, path });
+  return NextResponse.json({ ok: true });
 }
