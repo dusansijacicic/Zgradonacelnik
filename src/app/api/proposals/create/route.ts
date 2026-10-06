@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { enforceRateLimit } from "@/lib/rateLimit";
+import { isBuildingPremium } from "@/lib/buildingPremium";
 
 const bodySchema = z.object({
   building_id: z.string().uuid(),
@@ -36,6 +37,10 @@ export async function POST(request: Request) {
   const captcha = await verifyTurnstileToken({ token: body.data.captcha_token });
   if (!captcha.ok) {
     return NextResponse.json({ error: "captcha_failed" }, { status: 400 });
+  }
+
+  if (!(await isBuildingPremium(supabase, body.data.building_id))) {
+    return NextResponse.json({ error: "premium_required", detail: "Predlozi i glasanje su dostupni zgradama sa aktivnim Premium planom." }, { status: 403 });
   }
 
   const { data: row, error } = await supabase

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { isBuildingPremium } from "@/lib/buildingPremium";
 
 const schema = z.object({
   proposal_id: z.string().uuid(),
@@ -18,6 +19,16 @@ export async function POST(request: NextRequest) {
   }
 
   const { proposal_id, vote } = body.data;
+
+  const { data: proposal } = await supabase
+    .from("building_proposals")
+    .select("building_id")
+    .eq("id", proposal_id)
+    .maybeSingle();
+  if (!proposal) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (!(await isBuildingPremium(supabase, proposal.building_id))) {
+    return NextResponse.json({ error: "premium_required", detail: "Predlozi i glasanje su dostupni zgradama sa aktivnim Premium planom." }, { status: 403 });
+  }
 
   const { error } = await supabase.from("proposal_votes").upsert(
     { proposal_id, user_id: user.id, vote },

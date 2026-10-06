@@ -198,7 +198,7 @@ export default async function Home({ searchParams }: HomeProps) {
               { n: "1", title: "Prijavite se",         desc: "Google OAuth — jedan klik, nema lozinke" },
               { n: "2", title: "Nađite zgradu",        desc: "Pretražite adresu na mapi ili unesite ručno" },
               { n: "3", title: "Potvrdite stanovanje", desc: "Pošaljite dokaz — admin verifikuje za 24h" },
-              { n: "4", title: "Koristite platformu",  desc: "Glasajte, pratite, ocenjujte — besplatno" },
+              { n: "4", title: "Koristite platformu",  desc: "Pratite zgradu, ocenjujte upravnika — stanari ne plaćaju" },
             ].map((s, i) => (
               <div key={s.n} className="relative">
                 {i < 3 && (
@@ -235,7 +235,7 @@ export default async function Home({ searchParams }: HomeProps) {
             tag="Stanar / Vlasnik"
             name="Ana, 42 god."
             desc="Plaća mesečni doprinos ali ne zna ko je njen upravnik ni na šta troši novac."
-            tags={["Uvid u finansije", "Glasanje", "Besplatno"]}
+            tags={["Uvid u finansije", "Ocene upravnika", "Besplatno"]}
             tagCls="bg-blue-50 text-blue-700"
           />
           <PersonaCard
@@ -272,7 +272,7 @@ export default async function Home({ searchParams }: HomeProps) {
               </div>
               <div className="mt-1 text-sm text-slate-400">zauvek besplatno</div>
               <ul className="mt-7 space-y-3">
-                {["Pretraga upravnika", "Predlozi i glasanje", "Oglasna tabla", "Ocenjivanje upravnika"].map((f) => (
+                {["Pretraga upravnika", "Oglasna tabla", "Dokumenta zgrade", "Ocenjivanje upravnika"].map((f) => (
                   <li key={f} className="flex items-center gap-2.5 text-sm text-slate-700">
                     <CheckIcon className="h-4 w-4 shrink-0 text-emerald-500" />
                     {f}
@@ -291,7 +291,7 @@ export default async function Home({ searchParams }: HomeProps) {
               </div>
               <div className="mt-1 text-sm text-slate-400">mesečno po zgradi</div>
               <ul className="mt-7 space-y-3">
-                {["Sve iz osnovnog plana", "Finansijski izveštaji", "Zapisnici skupštine", "Premium dokumenta"].map((f) => (
+                {["Sve iz osnovnog plana", "Predlozi i glasanje", "Finansijski izveštaji", "Zapisnici skupštine"].map((f) => (
                   <li key={f} className="flex items-center gap-2.5 text-sm text-slate-200">
                     <CheckIcon className="h-4 w-4 shrink-0 text-emerald-400" />
                     {f}
@@ -440,7 +440,7 @@ const FEATURES = [
     iconBg: "bg-blue-50", iconColor: "text-blue-600",
     title: "Predlozi i glasanje",
     desc: "Predložite radove, glasajte Za/Protiv/Uzdržan. Pratite status u realnom vremenu.",
-    premium: false,
+    premium: true,
   },
   {
     iconPath: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",

@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { isBuildingPremium } from "@/lib/buildingPremium";
+import PremiumLocked from "@/components/PremiumLocked";
 import ProposalsClient from "./ui";
 
 export default async function BuildingProposalsPage({
@@ -11,6 +13,10 @@ export default async function BuildingProposalsPage({
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect(`/login?next=/zgrade/${encodeURIComponent(id)}/predlozi`);
+
+  if (!(await isBuildingPremium(supabase, id))) {
+    return <PremiumLocked buildingId={id} title="Predlozi i glasanje" desc="Predlozi radova i glasanje stanara dostupni su zgradama sa aktivnim Premium planom. Premium aktivira upravnik zgrade." />;
+  }
 
   const { data: proposals } = await supabase
     .from("building_proposals")

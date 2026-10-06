@@ -83,7 +83,7 @@ export default async function BuildingPage({ params }: { params: Promise<{ id: s
 
   const navItems = [
     { href: `/zgrade/${id}/oglasna-tabla`, icon: "📢", label: "Oglasna tabla", desc: "Obaveštenja", premium: false },
-    { href: `/zgrade/${id}/predlozi`, icon: "🗳️", label: "Predlozi", desc: "Glasanje o radovima", premium: false },
+    { href: `/zgrade/${id}/predlozi`, icon: "🗳️", label: "Predlozi", desc: "Glasanje o radovima", premium: true },
     { href: `/zgrade/${id}/zapisnici`, icon: "📝", label: "Zapisnici", desc: "Skupštine i odluke", premium: true },
     { href: `/zgrade/${id}/finansije`, icon: "💰", label: "Finansije", desc: "Prihodi i rashodi", premium: true },
     { href: `/zgrade/${id}/dokumenta`, icon: "📁", label: "Dokumenta", desc: "Ugovori i dokumenti", premium: false },
