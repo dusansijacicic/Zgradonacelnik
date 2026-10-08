@@ -1,3 +1,11 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Prijava zloupotrebe",
+  description: "Prijavite lažnu recenziju, netačne podatke ili zloupotrebu platforme.",
+  alternates: { canonical: "/prijava-zloupotrebe" },
+};
+
 export default function AbuseReportPage() {
   return (
     <div className="flex flex-1 justify-center bg-zinc-50 px-4 py-10">

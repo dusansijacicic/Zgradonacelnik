@@ -1,3 +1,11 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Uslovi korišćenja",
+  description: "Uslovi korišćenja platforme Zgradonačelnik.rs za stanare i profesionalne upravnike zgrada.",
+  alternates: { canonical: "/uslovi" },
+};
+
 export default function TermsPage() {
   return (
     <div className="flex flex-1 justify-center bg-zinc-50 px-4 py-10">

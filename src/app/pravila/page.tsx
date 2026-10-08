@@ -1,3 +1,11 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Pravila za upravnike, recenzije i transparentno vođenje zgrade",
+  description: "Pravila platforme: obaveze upravnika, pravila za recenzije i transparentno vođenje finansija zgrade.",
+  alternates: { canonical: "/pravila" },
+};
+
 export default function RulesPage() {
   return (
     <div className="flex flex-1 justify-center bg-zinc-50 px-4 py-10">

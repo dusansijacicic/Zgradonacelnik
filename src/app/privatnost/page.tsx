@@ -1,3 +1,11 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Politika privatnosti",
+  description: "Kako Zgradonačelnik.rs prikuplja, koristi i štiti lične podatke stanara i upravnika.",
+  alternates: { canonical: "/privatnost" },
+};
+
 export default function PrivacyPage() {
   return (
     <div className="flex flex-1 justify-center bg-zinc-50 px-4 py-10">

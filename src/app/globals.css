@@ -56,3 +56,21 @@ a, button {
   outline-offset: 2px;
   border-radius: 6px;
 }
+
+/* Blog tekst (markdown → HTML). Bez typography plugina: samo ono što blog koristi. */
+.prose-blog { color: #334155; font-size: 1.0625rem; line-height: 1.75; }
+.prose-blog > * + * { margin-top: 1.1em; }
+.prose-blog h2 { margin-top: 2em; font-size: 1.5rem; line-height: 1.3; font-weight: 800; color: #0f172a; letter-spacing: -0.01em; }
+.prose-blog h3 { margin-top: 1.6em; font-size: 1.2rem; font-weight: 700; color: #0f172a; }
+.prose-blog a { color: #0f2744; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.prose-blog ul { list-style: disc; padding-left: 1.4em; }
+.prose-blog ol { list-style: decimal; padding-left: 1.4em; }
+.prose-blog li + li { margin-top: 0.35em; }
+.prose-blog strong { color: #0f172a; font-weight: 700; }
+.prose-blog blockquote { border-left: 3px solid #cbd5e1; padding-left: 1em; color: #475569; font-style: italic; }
+.prose-blog code { background: #f1f5f9; border-radius: 4px; padding: 0.1em 0.35em; font-size: 0.9em; }
+.prose-blog pre { background: #0f172a; color: #e2e8f0; border-radius: 10px; padding: 1em; overflow-x: auto; font-size: 0.9em; }
+.prose-blog pre code { background: none; padding: 0; }
+.prose-blog img { border-radius: 12px; }
+.prose-blog table { width: 100%; border-collapse: collapse; font-size: 0.95em; display: block; overflow-x: auto; }
+.prose-blog th, .prose-blog td { border: 1px solid #e2e8f0; padding: 0.5em 0.75em; text-align: left; }

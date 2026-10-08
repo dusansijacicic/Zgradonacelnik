@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabasePublicClient } from "@/lib/supabase/public";
 
 const querySchema = z.object({
   lat: z.coerce.number(),
@@ -9,7 +9,7 @@ const querySchema = z.object({
 });
 
 export async function GET(request: Request) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabasePublicClient();
   const url = new URL(request.url);
   const qs = querySchema.safeParse({
     lat: url.searchParams.get("lat"),
@@ -59,6 +59,6 @@ export async function GET(request: Request) {
     building: buildingsById.get(r.building_id) ?? null,
   }));
 
-  return NextResponse.json({ results: out });
+  return NextResponse.json({ results: out }, { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=600" } });
 }
 

@@ -24,6 +24,7 @@ export default async function AdminHomePage() {
     { href: "/admin/zgrade-upravnici", label: "Upravnik ↔ zgrada", badge: assignments.count },
     { href: "/admin/recenzije", label: "Moderacija recenzija", badge: reviews.count },
     { href: "/admin/prijave-recenzija", label: "Prijave recenzija", badge: reports.count },
+    { href: "/admin/blog", label: "Blog" },
     { href: "/admin/registar-upravnika", label: "Registar upravnika (sinhronizacija)" },
     { href: "/admin/pozivi-upravnicima", label: "Pozivi upravnicima" },
     { href: "/admin/verifikacije", label: "Zahtevi za verifikaciju upravnika" },

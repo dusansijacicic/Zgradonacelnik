@@ -1,24 +1,44 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { AuthCodeRedirect } from "@/components/AuthCodeRedirect";
+import { JsonLd } from "@/components/JsonLd";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/seo";
 
-type HomeProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+export const metadata: Metadata = {
+  title: { absolute: `${SITE_NAME} — upravnici zgrada, ocene stanara i finansije zgrade` },
+  description: SITE_DESCRIPTION,
+  alternates: { canonical: "/" },
+  openGraph: { url: "/" },
+};
 
-export default async function Home({ searchParams }: HomeProps) {
-  const sp = await searchParams;
-  const code = sp.code;
-  if (typeof code === "string" && code.length > 0) {
-    const next = typeof sp.next === "string" ? sp.next : "/dashboard";
-    redirect(`/auth/callback?code=${code}&next=${encodeURIComponent(next)}`);
-  }
-  try {
-    const supabase = await createSupabaseServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) redirect("/dashboard");
-  } catch { /* landing */ }
-
+export default function Home() {
   return (
     <div className="flex flex-1 flex-col">
+      <AuthCodeRedirect />
+      <JsonLd
+        data={[
+          {
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            name: SITE_NAME,
+            url: SITE_URL,
+            logo: `${SITE_URL}/zgradonacelnik_logo.jpeg`,
+            areaServed: { "@type": "Country", name: "Srbija" },
+          },
+          {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            name: SITE_NAME,
+            url: SITE_URL,
+            inLanguage: "sr-Latn",
+            potentialAction: {
+              "@type": "SearchAction",
+              target: `${SITE_URL}/pretraga?q={search_term_string}`,
+              "query-input": "required name=search_term_string",
+            },
+          },
+        ]}
+      />
 
       {/* ── HERO ── */}
       <section
@@ -35,7 +55,7 @@ export default async function Home({ searchParams }: HomeProps) {
             <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h16M4 17h16" />
             </svg>
-            3.500+ upravnika iz PKS registra
+            1.500 licenciranih upravnika iz PKS registra
           </div>
 
           <h1 className="mx-auto mt-7 max-w-2xl text-4xl font-extrabold leading-[1.15] tracking-tight text-white sm:text-5xl lg:text-6xl">
@@ -133,7 +153,7 @@ export default async function Home({ searchParams }: HomeProps) {
       <section className="border-b border-slate-100 bg-white py-5">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-x-8 gap-y-3 px-4 sm:gap-x-12 sm:px-6">
           {([
-            { icon: "db",     text: "3.500+ upravnika u bazi",  color: "text-sky-500" },
+            { icon: "db",     text: "1.500 licenciranih upravnika",  color: "text-sky-500" },
             { icon: "shield", text: "PKS verifikovani podaci",   color: "text-emerald-500" },
             { icon: "star",   text: "Recenzije stanara",         color: "text-amber-500" },
             { icon: "lock",   text: "Sigurna prijava (Google)",  color: "text-slate-400" },

@@ -1,4 +1,12 @@
+import type { Metadata } from "next";
 import MapaClient from "./ui";
+
+export const metadata: Metadata = {
+  title: "Mapa upravnika zgrada — pretraga po lokaciji",
+  description: "Pronađite profesionalnog upravnika zgrade u svom komšiluku na mapi, po radijusu od vaše adrese.",
+  alternates: { canonical: "/pretraga/mapa" },
+};
+
 
 export default function MapSearchPage() {
   return (

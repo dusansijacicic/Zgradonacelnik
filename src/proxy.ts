@@ -1,69 +1,49 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-// /zgrade/[id] i podstranice: samo prijavljeni korisnici koji su završili onboarding.
-const PROTECTED_PREFIXES = ["/dashboard", "/manager", "/admin", "/zgrade/"];
 const ONBOARDING_PATH = "/onboarding";
 
+/**
+ * Radi SAMO na zaštićenim rutama (vidi matcher) — javne stranice idu direktno sa CDN-a.
+ * Prijava se proverava lokalno (getClaims verifikuje JWT bez poziva Supabase Auth servera
+ * kada projekat koristi asimetrične JWT ključeve; inače automatski pada na getUser).
+ */
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  let response = NextResponse.next({ request });
 
-  // Forward current pathname so Server Components (e.g. SiteHeader) can read it via headers()
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-pathname", pathname);
-
-  const isOnboarding = pathname === ONBOARDING_PATH;
-  const requiresAuth =
-    isOnboarding ||
-    PROTECTED_PREFIXES.some((prefix) =>
-      prefix.endsWith("/") ? pathname.startsWith(prefix) : pathname === prefix || pathname.startsWith(`${prefix}/`),
-    );
-
-  if (!requiresAuth) {
-    return NextResponse.next({ request: { headers: requestHeaders } });
-  }
-
-  let response = NextResponse.next({ request: { headers: requestHeaders } });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          response = NextResponse.next({ request: { headers: requestHeaders } });
-          for (const { name, value, options } of cookiesToSet) {
-            response.cookies.set(name, value, options);
-          }
-        },
+  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        for (const { name, value } of cookiesToSet) request.cookies.set(name, value);
+        response = NextResponse.next({ request });
+        for (const { name, value, options } of cookiesToSet) response.cookies.set(name, value, options);
       },
     },
-  );
+  });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data } = await supabase.auth.getClaims();
+  const userId = data?.claims?.sub;
 
-  if (!user) {
+  if (!userId) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
+    loginUrl.search = "";
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // For non-onboarding protected routes, check if onboarding is done
-  if (!isOnboarding) {
-    const { data: profile, error: profileErr } = await supabase
+  if (pathname !== ONBOARDING_PATH) {
+    const { data: profile, error } = await supabase
       .from("user_profiles")
       .select("onboarding_completed")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .maybeSingle();
-
-    // If DB error (e.g. column missing before migration), allow through rather than infinite loop
-    if (!profileErr && !profile?.onboarding_completed) {
+    // Greška u bazi: pusti dalje (stranica sama proverava), da ne nastane beskonačna petlja.
+    if (!error && !profile?.onboarding_completed) {
       return NextResponse.redirect(new URL(ONBOARDING_PATH, request.url));
     }
   }
@@ -72,5 +52,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
+  matcher: ["/dashboard/:path*", "/manager/:path*", "/admin/:path*", "/zgrade/:path*", "/onboarding"],
 };

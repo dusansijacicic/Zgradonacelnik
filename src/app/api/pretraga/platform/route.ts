@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabasePublicClient } from "@/lib/supabase/public";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   const pageSize = Math.min(250, Math.max(1, Number.parseInt(url.searchParams.get("pageSize") ?? "50", 10) || 50));
   const from = (page - 1) * pageSize;
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabasePublicClient();
   const like = (v: string) => `%${v.replace(/[%_,()]/g, " ")}%`;
 
   let query = supabase
@@ -43,5 +43,5 @@ export async function GET(request: Request) {
     total: count ?? 0,
     page,
     pageSize,
-  });
+  }, { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=600" } });
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-const PAGE_SIZE = 250;
+const PAGE_SIZE = 50;
 const DEBOUNCE_MS = 380;
 
 function useDebouncedValue<T>(value: T, delay: number): T {
@@ -62,6 +62,12 @@ const SORT_OPTIONS = [
 
 export default function PretragaPageClient() {
   const [searchInput, setSearchInput] = useState("");
+  // Link iz Google pretrage / deljeni link: /pretraga?q=ime
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- jednokratno čitanje URL-a posle hidratacije
+    if (q) setSearchInput(q.slice(0, 80));
+  }, []);
   const debouncedSearch = useDebouncedValue(searchInput, DEBOUNCE_MS);
 
   const [cityInput, setCityInput] = useState("");

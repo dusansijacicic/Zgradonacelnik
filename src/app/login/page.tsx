@@ -1,5 +1,13 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import LoginClient from "./ui";
+
+export const metadata: Metadata = {
+  title: "Prijava",
+  description: "Prijavite se na Zgradonačelnik.rs Google nalogom ili email adresom.",
+  alternates: { canonical: "/login" }, robots: { index: false, follow: true },
+};
+
 
 export default function LoginPage() {
   return (
